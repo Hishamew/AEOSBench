@@ -31,6 +31,8 @@ class SatsimEnvironment(BaseEnvironment):
         standard_time_init: str = TIMESTAMP,
         constellation: Constellation,
         all_tasks: TaskSet,
+        backend: torch.device | None = None,
+        fp_precision: torch.dtype = torch.float64,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -38,6 +40,13 @@ class SatsimEnvironment(BaseEnvironment):
         # RANK = int(os.environ.get('RANK', '0'))
         # device_count = torch.cuda.device_count()
         # self._device = torch.device(RANK % device_count)
+        if backend is not None:
+            self._backend = backend
+        else:
+            self._backend = torch.device(
+                'cuda' if torch.cuda.is_available() else 'cpu'
+            )
+        self._fp_precision = fp_precision
 
         self._authentic_timer = Timer(INTERVAL, self._start_time)
 
@@ -53,9 +62,9 @@ class SatsimEnvironment(BaseEnvironment):
         self._simulator_state_dict = self._simulator.reset()
         self._simulator_state_dict = dict_recursive_apply(
             self._simulator_state_dict,
-            lambda x: x.to(dtype=torch.float64),
+            lambda x: x.to(self._backend, dtype=torch.float64),
         )
-        self._simulator.to(dtype=torch.float64)
+        self._simulator.to(self._backend, dtype=torch.float64)
 
     @property
     def num_satellites(self) -> int:
@@ -167,18 +176,18 @@ class SatsimEnvironment(BaseEnvironment):
             has_access
         )  # [n_p, n_sc]
 
-        task_sensor_type = torch.tensor([task.sensor_type for task in tasks]
-                                        ).unsqueeze(1)  # [n_p,1]
-        satellite_sensor_type = self._simulator.sensor_type.unsqueeze(
-            0
+        task_sensor_type = torch.tensor(
+            [task.sensor_type for task in tasks],
+            device=self._backend,
+        ).unsqueeze(1)  # [n_p,1]
+        satellite_sensor_type = self._simulator.sensor_type.unsqueeze(0).to(
+            self._backend
         )  # [1, n_sc]
         sensor_match = task_sensor_type == satellite_sensor_type
 
-        return (has_access & camera_on & sensor_match).transpose(0, 1)
+        return (has_access & camera_on
+                & sensor_match).transpose(0, 1).to(torch.get_default_device())
 
     def get_earth_rotation(self) -> torch.Tensor:
-        earth_ephmeris = self._simulator.get_earth_ephemeris(
-            self._simulator_state_dict['_spacecraft']['_hub']['dynamic_params']
-            ['attitude_BN']
-        )
+        earth_ephmeris = self._simulator.get_earth_ephemeris(None)
         return earth_ephmeris['direction_cosine_matrix_CN'].squeeze()

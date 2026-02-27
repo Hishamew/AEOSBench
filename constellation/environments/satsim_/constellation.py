@@ -402,6 +402,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         self._with_target = with_target
 
     def _turn_switch(self, toggle: torch.Tensor) -> None:
+        toggle = toggle.to(self.camera_switch)
         self._camera_switch = self.camera_switch.bitwise_xor(toggle)
 
     def _simple_motor_torque_assign(
@@ -429,7 +430,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
 
     def get_earth_ephemeris(
         self,
-        target: torch.Tensor | torch.device | torch.dtype,
+        target: torch.Tensor | torch.device | torch.dtype | None,
     ) -> Ephemeris:
         earth_ephemeris: Ephemeris
         _, (earth_ephemeris, ) = self.spice_interface(names=['EARTH'])
@@ -557,7 +558,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
             sun_ephemeris['position_CN_N'],
             earth_ephemeris['position_CN_N'],
             spacecraft_output.position_BN_N,
-            torch.tensor([constants.REQ_EARTH * 1e3]),
+            torch.tensor([constants.REQ_EARTH * 1e3]).to(attitude_BN.device),
         )
 
         ## solar panel is a non-stated module
