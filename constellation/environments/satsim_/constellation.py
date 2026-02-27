@@ -51,6 +51,7 @@ from ...data import Constellation, TaskSet
 from ...data.actions import Actions
 from ...data.constellations import Satellites
 from ..basilisk.constants import UNIT_VECTOR_Z
+from .utils import convert_to_utc, is_utc_datetime_str
 
 
 class SatsimConstellationStateDict(TypedDict):
@@ -148,6 +149,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         )
 
     def _get_new_gravity_field(self, standard_time_init: str) -> GravityField:
+        standard_time_init = convert_to_utc(standard_time_init)
         sun = PointMassGravityBody.create_sun(timer=self._timer)
         earth = PointMassGravityBody.create_earth(
             timer=self._timer,
@@ -243,9 +245,10 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         )
 
     def setup_target_tracking(self) -> None:
-        sensor_pointing_directions = torch.tensor([
-            UNIT_VECTOR_Z for _ in range(self.num_satellites)
-        ])
+        sensor_pointing_directions = torch.tensor(
+            [UNIT_VECTOR_Z for _ in range(self.num_satellites)],
+            dtype=torch.get_default_dtype(),
+        )
         half_view = torch.tensor([
             sat.sensor.half_field_of_view for sat in self._satellites
         ])
@@ -386,8 +389,8 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
             constants.REQ_EARTH * 1e3,
         )
         self._update_tracking_target(
-            position_LP_P,
-            with_target,
+            position_LP_P.to(self.tracking_target),
+            with_target.to(self.with_target),
         )
 
     def _update_tracking_target(
@@ -471,7 +474,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
             attitude_BN=attitude_BN,
             position_LP_P=self.task_points,
             equatorial_radius=constants.REQ_EARTH * 1e3,
-            polar_radius=constants.REQ_EARTH,
+            polar_radius=constants.REQ_EARTH * 1e3,
         )
         return access_state
 
@@ -554,7 +557,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
             sun_ephemeris['position_CN_N'],
             earth_ephemeris['position_CN_N'],
             spacecraft_output.position_BN_N,
-            constants.REQ_EARTH * 1e3,
+            torch.tensor([constants.REQ_EARTH * 1e3]),
         )
 
         ## solar panel is a non-stated module
@@ -584,7 +587,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         motor_torque = self._simple_motor_torque_assign(control_torque)
         reaction_wheels_state_dict = state_dict['_spacecraft'][
             '_state_effectors']['_reaction_wheels']
-        reaction_wheels_state_dict, (battery_state_dict
+        reaction_wheels_state_dict, (battery_state_dict,
                                      ) = self.reaction_wheels(
                                          reaction_wheels_state_dict,
                                          battery_state_dict=battery_state_dict,

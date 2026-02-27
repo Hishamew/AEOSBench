@@ -2,9 +2,12 @@ __all__ = [
     'SatsimEnvironment',
 ]
 
+import os
+
 import torch
 from Basilisk.utilities import macros, orbitalMotion
 from satsim.architecture import Timer, constants
+from satsim.utils import dict_recursive_apply
 
 from ...constants import INTERVAL, TIMESTAMP
 from ...data import Actions, Constellation, TaskSet
@@ -31,6 +34,11 @@ class SatsimEnvironment(BaseEnvironment):
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
+        # env set
+        # RANK = int(os.environ.get('RANK', '0'))
+        # device_count = torch.cuda.device_count()
+        # self._device = torch.device(RANK % device_count)
+
         self._authentic_timer = Timer(INTERVAL, self._start_time)
 
         self._simulator = SatsimConstellation(
@@ -39,8 +47,15 @@ class SatsimEnvironment(BaseEnvironment):
             standard_time_init,
             all_tasks,
         )
+
         self._constellation_data = constellation
+        self._authentic_timer.reset()
         self._simulator_state_dict = self._simulator.reset()
+        self._simulator_state_dict = dict_recursive_apply(
+            self._simulator_state_dict,
+            lambda x: x.to(dtype=torch.float64),
+        )
+        self._simulator.to(dtype=torch.float64)
 
     @property
     def num_satellites(self) -> int:
@@ -74,15 +89,15 @@ class SatsimEnvironment(BaseEnvironment):
         wheel_speeds = wheel_speeds.squeeze()
 
         for idx, satellite in enumerate(self._simulator.satellites):
-            r_BP_N = position_BP_N[idx].numpy()
-            v_BP_N = velocity_BP_N[idx].numpy()
+            r_BP_N = position_BP_N[idx].cpu().numpy()
+            v_BP_N = velocity_BP_N[idx].cpu().numpy()
             orbital_elements = orbitalMotion.rv2elem(
                 constants.MU_EARTH * 1e9,
                 r_BP_N,
                 v_BP_N,
             )
             orbit = Orbit(
-                self._orbit_id,
+                satellite.orbit_id,
                 orbital_elements.e,
                 orbital_elements.a,
                 orbital_elements.i / macros.D2R,
