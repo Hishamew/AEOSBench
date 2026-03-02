@@ -27,6 +27,7 @@ from satsim.simulation.gravity import (
     SpiceInterface,
 )
 from satsim.simulation.power import (
+    NoBattery,
     SimpleBattery,
     SimplePowerSink,
     SimplePowerSinkStateDict,
@@ -40,7 +41,6 @@ from satsim.simulation.reaction_wheels import (
     concat,
 )
 from satsim.simulation.spacecraft import (
-    IntegrateMethod,
     Spacecraft,
     SpacecraftStateDict,
     SpacecraftStateOutput,
@@ -84,10 +84,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         super().__init__(timer=timer)
 
         self._n = len(constellation)
-        sorted_satellites = sorted(
-            [sat for sat in constellation.values()],
-            key=lambda x: x.id_,
-        )
+        sorted_satellites = constellation.sort()
         self._satellites = sorted_satellites
         self._standard_time_init = standard_time_init
         self._taskset = taskset
@@ -135,18 +132,15 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
             state_effectors=dict(_reaction_wheels=reaction_wheels),
         )
 
-        capacity = torch.tensor([
-            sat.battery.capacity for sat in self._satellites
-        ])
-        percentage_init = torch.tensor([
-            sat.battery.percentage for sat in self._satellites
-        ])
+        # capacity = torch.tensor([
+        #     sat.battery.capacity for sat in self._satellites
+        # ])
+        # percentage_init = torch.tensor([
+        #     sat.battery.percentage for sat in self._satellites
+        # ])
 
-        self._battery = SimpleBattery(
-            timer=self._timer,
-            storage_capacity=capacity,
-            stored_charge_percentage_init=percentage_init,
-        )
+        # TODO: To align simulator behaviors, we use NoBattery here
+        self._battery = NoBattery(timer=self._timer)
 
     def _get_new_gravity_field(self, standard_time_init: str) -> GravityField:
         standard_time_init = convert_to_utc(standard_time_init)
@@ -387,6 +381,13 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
             torch.zeros_like(latitude),
             constants.REQ_EARTH * 1e3,
             constants.REQ_EARTH * 1e3,
+        )
+
+        # NOTE: if with_target is False, point camera to earth center.
+        position_LP_P = torch.where(
+            with_target.unsqueeze(-1),
+            position_LP_P,
+            torch.zeros_like(position_LP_P),
         )
         self._update_tracking_target(
             position_LP_P.to(self.tracking_target),

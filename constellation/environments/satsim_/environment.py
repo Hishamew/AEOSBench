@@ -2,8 +2,7 @@ __all__ = [
     'SatsimEnvironment',
 ]
 
-import os
-
+import todd
 import torch
 from Basilisk.utilities import macros, orbitalMotion
 from satsim.architecture import Timer, constants
@@ -43,9 +42,7 @@ class SatsimEnvironment(BaseEnvironment):
         if backend is not None:
             self._backend = backend
         else:
-            self._backend = torch.device(
-                'cuda' if torch.cuda.is_available() else 'cpu'
-            )
+            self._backend = torch.device('cuda' if todd.Store.cuda else 'cpu')
         self._fp_precision = fp_precision
 
         self._authentic_timer = Timer(INTERVAL, self._start_time)
@@ -97,6 +94,9 @@ class SatsimEnvironment(BaseEnvironment):
                 'angular_velocity']
         wheel_speeds = wheel_speeds.squeeze()
 
+        if battery_percentages.dim() != 1:
+            battery_percentages = battery_percentages.expand_as(masses)
+
         for idx, satellite in enumerate(self._simulator.satellites):
             r_BP_N = position_BP_N[idx].cpu().numpy()
             v_BP_N = velocity_BP_N[idx].cpu().numpy()
@@ -105,10 +105,12 @@ class SatsimEnvironment(BaseEnvironment):
                 r_BP_N,
                 v_BP_N,
             )
+            # eccentricity and semi major axis is np.array for some reason
+            # we convert them to float to avoid fp precision conflict
             orbit = Orbit(
                 satellite.orbit_id,
-                orbital_elements.e,
-                orbital_elements.a,
+                float(orbital_elements.e),
+                float(orbital_elements.a),
                 orbital_elements.i / macros.D2R,
                 orbital_elements.Omega / macros.D2R,
                 orbital_elements.omega / macros.D2R,
@@ -116,7 +118,7 @@ class SatsimEnvironment(BaseEnvironment):
 
             sensor = Sensor(
                 satellite.sensor.type_,
-                self._simulator.camera_switch,
+                self._simulator.camera_switch[idx].item(),
                 satellite.sensor.half_field_of_view,
                 satellite.sensor.power,
             )
@@ -125,21 +127,22 @@ class SatsimEnvironment(BaseEnvironment):
                 battery_percentages[idx].item(),
             )
             reaction_wheels = satellite.reaction_wheels
+            wheel_speeds_idx = wheel_speeds[idx]
             reaction_wheels = tuple([
                 ReactionWheel(
                     rw.rw_type,
                     rw.rw_direction,
                     rw.max_momentum,
-                    wheel_speeds[idx].item(),
+                    wheel_speeds_idx[i].item(),
                     rw.power,
                     rw.efficiency,
-                ) for rw in reaction_wheels
+                ) for i, rw in enumerate(reaction_wheels)
             ])
 
             socket_satellite = Satellite(
                 satellite.id_,
                 tuple(inertias[idx].view(-1).tolist()),
-                tuple(masses[idx].view(-1).tolist()),
+                masses[idx].item(),
                 satellite.center_of_mass,
                 satellite.orbit_id,
                 orbit,
