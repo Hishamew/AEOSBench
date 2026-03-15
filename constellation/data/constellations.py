@@ -28,13 +28,13 @@ import random
 from collections import UserDict
 from enum import IntEnum, auto
 from typing import Any, TypedDict, cast
-import numpy as np
-import numpy.typing as npt
 from typing_extensions import Self
 
+import numpy as np
+import numpy.typing as npt
 import torch
-from todd.patches.py_ import json_dump, json_load
 from Basilisk.utilities import macros, orbitalMotion
+from todd.patches.py_ import json_dump, json_load
 
 from ..constants import MU_EARTH
 from .orbits import MRP_ORBIT, Orbit, OrbitDicts, Orbits
@@ -51,6 +51,7 @@ Inertia = tuple[  # kg/m^2
 # yapf: enable
 
 
+# TODO: data realistic
 class SolarPanelDict(TypedDict):
     direction: tuple[float, float, float]
     area: float
@@ -269,7 +270,10 @@ class MRPControl:
 
     @classmethod
     def sample(cls, inertia: Inertia, reaction_wheels: ReactionWheels) -> Self:
-        max_momentum, = {reaction_wheel.max_momentum for reaction_wheel in reaction_wheels}
+        max_momentum, = {
+            reaction_wheel.max_momentum
+            for reaction_wheel in reaction_wheels
+        }
         k = random.uniform(2, 5) * max(inertia) / max_momentum
         ki = random.uniform(0, 0.01)
         p = random.uniform(2, 4) * k
@@ -385,7 +389,7 @@ class Satellite:
         mass = random.uniform(50, 200)
         reaction_wheels = ReactionWheel.sample()
         return cls(
-            0,
+            id_,
             inertia,
             mass,
             (0.0, 0.0, 0.0),
@@ -520,9 +524,8 @@ class Constellation(UserDict[int, Satellite]):
         })
 
     @classmethod
-    def sample_mrp(cls) -> Self:
-        satellite = Satellite.sample_mrp()
-        return cls({satellite.id_: satellite})
+    def sample_mrp(cls, num: int = 1) -> Self:
+        return cls({id_: Satellite.sample_mrp(id_)} for id_ in range(num))
 
     def static_to_tensor(self) -> tuple[torch.Tensor, torch.Tensor]:
         satellites = self.sort()
