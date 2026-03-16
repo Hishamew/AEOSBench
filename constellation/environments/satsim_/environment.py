@@ -9,7 +9,7 @@ from satsim.architecture import Timer, constants
 from satsim.utils import dict_recursive_apply
 
 from ...constants import INTERVAL, TIMESTAMP
-from ...data import Actions, Constellation, TaskSet
+from ...data import Actions, Constellation, Coordinate, Orbit, TaskSet
 from ...data.constellations import (
     Battery,
     ReactionWheel,
@@ -17,7 +17,6 @@ from ...data.constellations import (
     Satellites,
     Sensor,
 )
-from ...data.orbits import Orbit
 from ..base import BaseEnvironment
 from .constellation import SatsimConstellation
 
@@ -32,6 +31,7 @@ class SatsimEnvironment(BaseEnvironment):
         all_tasks: TaskSet,
         backend: torch.device | None = None,
         fp_precision: torch.dtype = torch.float64,
+        reset_trigger_threshold: float = 1e-4,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -46,7 +46,6 @@ class SatsimEnvironment(BaseEnvironment):
         self._fp_precision = fp_precision
 
         self._authentic_timer = Timer(INTERVAL, self._start_time)
-
         self._simulator = SatsimConstellation(
             self._authentic_timer,
             constellation,
@@ -54,14 +53,26 @@ class SatsimEnvironment(BaseEnvironment):
             all_tasks,
         )
 
+        self._reset_trigger_threshold = reset_trigger_threshold
+
         self._constellation_data = constellation
         self._authentic_timer.reset()
         self._simulator_state_dict = self._simulator.reset()
+        self.previous_targets = [None for _ in range(self.num_satellites)]
+
         self._simulator_state_dict = dict_recursive_apply(
             self._simulator_state_dict,
             lambda x: x.to(self._backend, dtype=torch.float64),
         )
         self._simulator.to(self._backend, dtype=torch.float64)
+
+    @property
+    def previous_targets(self) -> list[Coordinate | None]:
+        return self._previous_targets
+
+    @previous_targets.setter
+    def previous_targets(self, value: list[Coordinate | None]) -> None:
+        self._previous_targets = value
 
     @property
     def num_satellites(self) -> int:
@@ -161,7 +172,41 @@ class SatsimEnvironment(BaseEnvironment):
             for satellite in satellites
         })
 
+    def _reset_integrators(self, need_reset: list[bool]) -> None:
+        need_reset_mask = torch.tensor(need_reset, device=self._backend)
+
+        integral_sigma = self._simulator_state_dict['_mrp_control'][
+            'integral_sigma']
+        integral_sigma = torch.where(
+            need_reset_mask.unsqueeze(1),
+            torch.zeros_like(integral_sigma),
+            integral_sigma,
+        )
+        self._simulator_state_dict['_mrp_control']['integral_sigma'
+                                                   ] = integral_sigma
+
     def take_actions(self, actions: Actions) -> None:
+
+        reset_flags = []
+        targets = [action.target_location for action in actions]
+        for p_t, target in zip(self.previous_targets, targets):
+            if target is None and p_t is None:
+                reset_flags.append(False)
+                continue
+            elif target is None or p_t is None:
+                reset_flags.append(True)
+                continue
+            x, y = target
+            px, py = p_t
+
+            flag = (
+                abs(x - px) > self._reset_trigger_threshold
+                or abs(y - py) > self._reset_trigger_threshold
+            )
+            reset_flags.append(flag)
+        self._reset_integrators(reset_flags)
+
+        self.previous_targets = targets
         self._simulator.take_actions(actions)
 
     def step(self) -> None:
@@ -170,7 +215,7 @@ class SatsimEnvironment(BaseEnvironment):
         )
         self.authentic_timer.step()
 
-    def is_visible(self, tasks: TaskSet) -> torch.Tensor:  # TODO: No need
+    def is_visible(self, tasks: TaskSet) -> torch.Tensor:
         access_state = self._simulator.get_task_access(
             self._simulator_state_dict
         )

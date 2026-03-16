@@ -525,7 +525,7 @@ class Constellation(UserDict[int, Satellite]):
 
     @classmethod
     def sample_mrp(cls, num: int = 1) -> Self:
-        return cls({id_: Satellite.sample_mrp(id_)} for id_ in range(num))
+        return cls({id_: Satellite.sample_mrp(id_) for id_ in range(num)})
 
     def static_to_tensor(self) -> tuple[torch.Tensor, torch.Tensor]:
         satellites = self.sort()

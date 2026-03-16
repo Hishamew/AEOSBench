@@ -14,7 +14,13 @@ from constellation import (
 )
 from constellation.algorithms import OptimalAlgorithm
 from constellation.callbacks import ComposedCallback
-from constellation.data import Constellation, MRPControl, Satellite, TaskSet
+from constellation.data import (
+    Constellation,
+    MRPControl,
+    Satellite,
+    Satellites,
+    TaskSet,
+)
 from constellation.environments import SatsimEnvironment
 from constellation.evaluators import (
     CompletionRateEvaluator,
@@ -96,7 +102,6 @@ def reconfigure_pid(
     pid_gains: torch.Tensor = configurer(sc_masses, sc_inertia, rw_inertia)
     k, ki, p = pid_gains.unbind(dim=-1)
     ki = ki * 1e-4
-    breakpoint()
     satellites = [
         Satellite(
             sat.id_,
@@ -113,6 +118,7 @@ def reconfigure_pid(
                 k=k[i].item(),
                 ki=ki[i].item(),
                 p=p[i].item(),
+                integral_limit=0.1,
             ),
             sat.true_anomaly,
             sat.mrp_attitude_bn,
@@ -126,13 +132,48 @@ def reconfigure_pid(
     return new_constellation
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--threshold', type=float, default=0.99)
-    parser.add_argument('--ckpt', type=str, default='')
-    parser.add_argument('--num_satellites', type=int, default=512)
-    args = parser.parse_args()
-    return args
+def process_fake_batch(
+    fake_batch: list[int],
+    satellites_root: pathlib.Path,
+    configurer: MLPPIDConfigure,
+    completion_rate_threshold: float,
+) -> None:
+    if not fake_batch:
+        return
+
+    constellation = Constellation.sample_mrp(len(fake_batch))
+    constellation = reconfigure_pid(constellation, configurer)
+    environment = SatsimEnvironment(
+        constellation=constellation,
+        all_tasks=TASKSET,
+    )
+    task_manager = TaskManager(timer=environment.timer, taskset=TASKSET)
+    callbacks = ComposedCallback(
+        callbacks=[
+            PerCompletionRateEvaluator(),
+        ],
+    )
+    controller = Controller(
+        pathlib.Path(__file__).stem,
+        environment=environment,
+        task_manager=task_manager,
+        callbacks=callbacks,
+    )
+
+    algorithm = OptimalAlgorithm(timer=environment.timer)
+    algorithm.prepare(environment, task_manager)
+
+    try:
+        controller.run(algorithm, progress_bar=False, max_time_step=7200)
+    except Exception as e:
+        todd.logger.error("rank %d failed batch %s: %s", RANK, fake_batch, e)
+        return
+
+    completion_rate: list[float] = controller.memo['metrics']['CR_persat']
+    for j, cr in zip(fake_batch, completion_rate):
+        todd.logger.info("rank %d finished %d with %s", RANK, j, cr)  # noqa: E501 yapf: disable
+        if cr > completion_rate_threshold:
+            constellation.dump(str(satellites_root / f'{j}.json'))
 
 
 def generate_satellites(
@@ -160,63 +201,59 @@ def generate_satellites(
         if len(fake_batch) < num_satellites:
             continue
 
-        constellation = Constellation.sample_mrp(len(fake_batch))
-        constellation = reconfigure_pid(constellation, configurer)
-        environment = SatsimEnvironment(
-            constellation=constellation,
-            all_tasks=TASKSET,
+        process_fake_batch(
+            fake_batch,
+            satellites_root,
+            configurer,
+            completion_rate_threshold,
         )
-        task_manager = TaskManager(timer=environment.timer, taskset=TASKSET)
-        callbacks = ComposedCallback(
-            callbacks=[
-                PerCompletionRateEvaluator(),
-            ],
-        )
-        controller = Controller(
-            pathlib.Path(__file__).stem,
-            environment=environment,
-            task_manager=task_manager,
-            callbacks=callbacks,
-        )
+        fake_batch.clear()
 
-        algorithm = OptimalAlgorithm(timer=environment.timer)
-        algorithm.prepare(environment, task_manager)
+    process_fake_batch(
+        fake_batch, satellites_root, configurer, completion_rate_threshold
+    )
 
-        try:
-            controller.run(algorithm, progress_bar=False, max_time_step=7200)
-        except Exception as e:
-            todd.logger.error("rank %d failed %d: %s", RANK, i, e)
-            continue
 
-        completion_rate: list[float] = controller.memo['metrics']['CR_persat']
-        for j, cr in zip(fake_batch, completion_rate):
-            todd.logger.info("rank %d finished %d with %s", RANK, j, cr)  # noqa: E501 yapf: disable
-            if cr > completion_rate_threshold:
-                constellation.dump(str(satellites_root / f'{j}.json'))
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--threshold', type=float, default=0.99)
+    parser.add_argument('--ckpt', type=str, default='')
+    parser.add_argument('--num_satellites', type=int, default=512)
+    args = parser.parse_args()
+    return args
 
 
 def main() -> None:
     args = parse_args()
     configurer = MLPPIDConfigure(hidden_dim=128, task_invariant=True)
-    configurer.load_state_dict(torch.load(args.ckpt))
+    if todd.Store.cuda:
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+    configurer.load_state_dict(
+        torch.load(args.ckpt, map_location=device),
+    )
 
     generate_satellites(
         'train',
         10_000,
         args.threshold,
         configurer,
+        args.num_satellites,
     )
     generate_satellites(
         'val_unseen',
         2_000,
         args.threshold,
         configurer,
+        args.num_satellites,
     )
     generate_satellites(
         'test',
         2_000,
         args.threshold,
         configurer,
+        args.num_satellites,
     )
 
 

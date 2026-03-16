@@ -58,7 +58,7 @@ class PerCompletionRateEvaluator(BaseEvaluator):
         return self.controller.memo['max_progress_per_satellite']
 
     @max_progress_per_satellite.setter
-    def max_progress_persatellite(self, value: torch.Tensor) -> None:
+    def max_progress_per_satellite(self, value: torch.Tensor) -> None:
         self.controller.memo['max_progress_per_satellite'] = value
 
     @property
