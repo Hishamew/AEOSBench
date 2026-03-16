@@ -176,4 +176,4 @@ cython_debug/
 *.bak
 
 # Local-only / large vendor deps
-third_party/
+model/
