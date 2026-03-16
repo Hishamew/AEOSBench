@@ -1,3 +1,6 @@
 [submodule "third_party/basilisk"]
 	path = third_party/basilisk
 	url = https://github.com/AVSLab/basilisk.git
+[submodule "third_party/Sat-Sim-pytorch"]
+	path = third_party/Sat-Sim-pytorch
+	url = https://github.com/MessiXiang/Sat-Sim-pytorch.git
