@@ -14,6 +14,8 @@ __all__ = [
     'ECCENTRICITY_EARTH',
     'MU_EARTH',
     'MAX_OFF_NADIR_ANGLE',
+    'D2R',
+    'R2D',
 ]
 
 import math
@@ -41,3 +43,6 @@ ECCENTRICITY_EARTH = 0.0  # TODO
 MAX_OFF_NADIR_ANGLE = math.pi / 3  # 60 degrees
 # MAX_OFF_NADIR_ANGLE = math.pi / 4  # 45 degrees
 # MAX_OFF_NADIR_ANGLE = math.pi / 6  # 30 degrees
+
+D2R = (math.pi / 180.)
+R2D = (180. / math.pi)

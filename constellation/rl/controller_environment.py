@@ -2,9 +2,9 @@ __all__ = [
     'ControllerEnvironment',
 ]
 
-from functools import partial
 import random
-from typing import Any, TypedDict, cast, List, Self
+from functools import partial
+from typing import Any, List, Self, TypedDict, cast
 
 import einops
 import gymnasium as gym
@@ -12,42 +12,39 @@ import numpy as np
 import numpy.typing as npt
 import torch
 from gymnasium import spaces
-
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from todd.patches.py_ import json_load
-from constellation.new_transformers import Statistics
-from constellation.new_transformers import SATELLITE_DIM, TASK_DIM
-from constellation.data import SensorType
+from todd.runners import Memo
 
 from constellation import (
     ANNOTATIONS_ROOT,
     CONSTELLATIONS_ROOT,
-    STATISTICS_PATH,
     MAX_TIME_STEP,
+    STATISTICS_PATH,
     TASKSETS_ROOT,
     TIMESTAMP,
+    TaskManager,
 )
+from constellation.callbacks import ComposedCallback
+from constellation.callbacks.base import BaseCallback
+from constellation.controller import Controller
 from constellation.data import (
     Action,
     Actions,
     Constellation,
+    SensorType,
     Task,
     TaskSet,
 )
-from constellation.environments import BasiliskEnvironment, BaseEnvironment
+from constellation.environments import BaseEnvironment, SatsimEnvironment
 from constellation.evaluators import (
     BaseEvaluator,
     CompletionRateEvaluator,
-    TurnAroundTimeEvaluator,
     PowerUsageEvaluator,
+    TurnAroundTimeEvaluator,
 )
-from constellation import TaskManager
-from constellation.callbacks.base import BaseCallback
-from constellation.callbacks import ComposedCallback
-from constellation.controller import Controller
-from constellation.rl.environment import Observation, null_observation, Padding
-
-from todd.runners import Memo
+from constellation.new_transformers import SATELLITE_DIM, TASK_DIM, Statistics
+from constellation.rl.environment import Observation, Padding, null_observation
 
 MAX_NUM_SATELLITES = 51
 MAX_NUM_TASKS = 302
@@ -221,7 +218,7 @@ class ControllerEnvironment(gym.Env[Observation, npt.NDArray[np.uint16]]):
         )
         tasks: TaskSet = TaskSet.load(str(taskset_path))
 
-        simulator = BasiliskEnvironment(
+        simulator = SatsimEnvironment(
             standard_time_init=TIMESTAMP,
             constellation=constellation,
             all_tasks=tasks,
@@ -264,7 +261,7 @@ class ControllerEnvironment(gym.Env[Observation, npt.NDArray[np.uint16]]):
 
         task_ids = (action[:_controller.environment.num_satellites]
                     - 1).tolist()
-        
+
         # print("task_ids:", task_ids)
 
         self._take_actions(task_ids)
@@ -295,7 +292,8 @@ class ControllerEnvironment(gym.Env[Observation, npt.NDArray[np.uint16]]):
         # print("Taking actions:", task_ids,
         #         "tasks available:", len(tasks),)
         target_locations = [
-            None if task_id == -1 or task_id >= len(tasks) else tasks[task_id].coordinate # FIXME: a bug
+            None if task_id == -1 or task_id >= len(tasks) else
+            tasks[task_id].coordinate  # FIXME: a bug
             for task_id in task_ids
         ]
 

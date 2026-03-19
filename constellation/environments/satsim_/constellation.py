@@ -50,8 +50,7 @@ from satsim.utils import LLA2PCPF, move_to
 from ...data import Constellation, TaskSet
 from ...data.actions import Actions
 from ...data.constellations import Satellites
-from ..basilisk.constants import UNIT_VECTOR_Z
-from .utils import convert_to_utc, is_utc_datetime_str
+from .utils import UNIT_VECTOR_Z, convert_to_utc, is_utc_datetime_str
 
 
 class SatsimConstellationStateDict(TypedDict):

@@ -33,10 +33,10 @@ from typing_extensions import Self
 import numpy as np
 import numpy.typing as npt
 import torch
-from Basilisk.utilities import macros, orbitalMotion
+from satsim.data.orbits import OrbitalElement, OrbitalElements, elem2rv
 from todd.patches.py_ import json_dump, json_load
 
-from ..constants import MU_EARTH
+from ..constants import D2R, MU_EARTH
 from .orbits import MRP_ORBIT, Orbit, OrbitDicts, Orbits
 from .visualization import SatelliteDataJson
 
@@ -406,19 +406,20 @@ class Satellite:
 
     @property
     def rv(self) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-        orbital_elements = orbitalMotion.ClassicElements()
-        orbital_elements.e = self.orbit.eccentricity
-        orbital_elements.a = self.orbit.semi_major_axis
-        orbital_elements.i = self.orbit.inclination * macros.D2R
-        orbital_elements.Omega = (
-            self.orbit.right_ascension_of_the_ascending_node * macros.D2R
+        orbital_element = OrbitalElement(
+            self.orbit_id,
+            self.orbit.semi_major_axis,
+            self.orbit.eccentricity,
+            self.orbit.inclination * D2R,
+            self.orbit.right_ascension_of_the_ascending_node * D2R,
+            self.orbit.argument_of_perigee * D2R,
+            self.true_anomaly * D2R,
         )
-        orbital_elements.omega = (self.orbit.argument_of_perigee * macros.D2R)
-        orbital_elements.f = self.true_anomaly * macros.D2R
-        return orbitalMotion.elem2rv(
-            MU_EARTH,
-            orbital_elements,
-        )  # r_CN_N, v_CN_N
+        r, v = elem2rv(
+            MU_EARTH, OrbitalElements([orbital_element])
+        )  # type: ignore
+
+        return r.squeeze().cpu().numpy(), v.squeeze().cpu().numpy()
 
     @property
     def static_data(self) -> list[float]:

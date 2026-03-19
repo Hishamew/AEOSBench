@@ -124,7 +124,6 @@ def reconfigure_pid(
             sat.mrp_attitude_bn,
         ) for i, sat in enumerate(constellation.sort())
     ]
-
     new_constellation = Constellation({
         satellite.id_: satellite
         for satellite in satellites
@@ -132,56 +131,11 @@ def reconfigure_pid(
     return new_constellation
 
 
-def process_fake_batch(
-    fake_batch: list[int],
-    satellites_root: pathlib.Path,
-    configurer: MLPPIDConfigure,
-    completion_rate_threshold: float,
-) -> None:
-    if not fake_batch:
-        return
-
-    constellation = Constellation.sample_mrp(len(fake_batch))
-    constellation = reconfigure_pid(constellation, configurer)
-    environment = SatsimEnvironment(
-        constellation=constellation,
-        all_tasks=TASKSET,
-    )
-    task_manager = TaskManager(timer=environment.timer, taskset=TASKSET)
-    callbacks = ComposedCallback(
-        callbacks=[
-            PerCompletionRateEvaluator(),
-        ],
-    )
-    controller = Controller(
-        pathlib.Path(__file__).stem,
-        environment=environment,
-        task_manager=task_manager,
-        callbacks=callbacks,
-    )
-
-    algorithm = OptimalAlgorithm(timer=environment.timer)
-    algorithm.prepare(environment, task_manager)
-
-    try:
-        controller.run(algorithm, progress_bar=False, max_time_step=7200)
-    except Exception as e:
-        todd.logger.error("rank %d failed batch %s: %s", RANK, fake_batch, e)
-        return
-
-    completion_rate: list[float] = controller.memo['metrics']['CR_persat']
-    for j, cr in zip(fake_batch, completion_rate):
-        todd.logger.info("rank %d finished %d with %s", RANK, j, cr)  # noqa: E501 yapf: disable
-        if cr > completion_rate_threshold:
-            constellation.dump(str(satellites_root / f'{j}.json'))
-
-
 def generate_satellites(
     split: str,
     n: int,
     completion_rate_threshold: float,
     configurer: MLPPIDConfigure,
-    num_satellites: int,
 ) -> None:
     satellites_root: pathlib.Path = SATELLITES_ROOT / split
     max_id = max(
@@ -192,33 +146,48 @@ def generate_satellites(
         default=-1,
     )
 
-    fake_batch = []
     for i in range(RANK, n, WORLD_SIZE):
         if i <= max_id:
             continue
 
-        fake_batch.append(i)
-        if len(fake_batch) < num_satellites:
-            continue
-
-        process_fake_batch(
-            fake_batch,
-            satellites_root,
-            configurer,
-            completion_rate_threshold,
+        constellation = Constellation.sample_mrp()
+        constellation = reconfigure_pid(constellation, configurer)
+        environment = SatsimEnvironment(
+            constellation=constellation,
+            all_tasks=TASKSET,
         )
-        fake_batch.clear()
+        task_manager = TaskManager(timer=environment.timer, taskset=TASKSET)
+        callbacks = ComposedCallback(
+            callbacks=[
+                CompletionRateEvaluator(),
+            ],
+        )
+        controller = Controller(
+            pathlib.Path(__file__).stem,
+            environment=environment,
+            task_manager=task_manager,
+            callbacks=callbacks,
+        )
 
-    process_fake_batch(
-        fake_batch, satellites_root, configurer, completion_rate_threshold
-    )
+        algorithm = OptimalAlgorithm(timer=environment.timer)
+        algorithm.prepare(environment, task_manager)
+
+        # try:
+        controller.run(algorithm, progress_bar=False, max_time_step=7200)
+        # except Exception as e:
+        #     todd.logger.error("rank %d failed %d: %s", RANK, i, e)
+        #     continue
+
+        completion_rate = controller.memo['metrics']['CR']
+        todd.logger.info("rank %d finished %d with %s", RANK, i, completion_rate)  # noqa: E501 yapf: disable
+        if completion_rate > completion_rate_threshold:
+            constellation.dump(str(satellites_root / f'{i}.json'))
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--threshold', type=float, default=0.99)
-    parser.add_argument('--ckpt', type=str, default='')
-    parser.add_argument('--num_satellites', type=int, default=512)
+    parser.add_argument('--ckpt', type=str)
     args = parser.parse_args()
     return args
 
@@ -239,21 +208,18 @@ def main() -> None:
         10_000,
         args.threshold,
         configurer,
-        args.num_satellites,
     )
     generate_satellites(
         'val_unseen',
         2_000,
         args.threshold,
         configurer,
-        args.num_satellites,
     )
     generate_satellites(
         'test',
         2_000,
         args.threshold,
         configurer,
-        args.num_satellites,
     )
 
 

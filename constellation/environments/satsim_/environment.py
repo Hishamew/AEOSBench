@@ -4,11 +4,10 @@ __all__ = [
 
 import todd
 import torch
-from Basilisk.utilities import macros, orbitalMotion
 from satsim.architecture import Timer, constants
 from satsim.utils import dict_recursive_apply
 
-from ...constants import INTERVAL, TIMESTAMP
+from ...constants import INTERVAL, R2D, TIMESTAMP
 from ...data import Actions, Constellation, Coordinate, Orbit, TaskSet
 from ...data.constellations import (
     Battery,
@@ -19,6 +18,7 @@ from ...data.constellations import (
 )
 from ..base import BaseEnvironment
 from .constellation import SatsimConstellation
+from .utils import rv2elem
 
 
 class SatsimEnvironment(BaseEnvironment):
@@ -32,6 +32,7 @@ class SatsimEnvironment(BaseEnvironment):
         backend: torch.device | None = None,
         fp_precision: torch.dtype = torch.float64,
         reset_trigger_threshold: float = 1e-4,
+        spice_kernel_dir: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -103,7 +104,7 @@ class SatsimEnvironment(BaseEnvironment):
         wheel_speeds: torch.Tensor = self._simulator_state_dict['_spacecraft'][
             '_state_effectors']['_reaction_wheels']['dynamic_params'][
                 'angular_velocity']
-        wheel_speeds = wheel_speeds.squeeze()
+        wheel_speeds = wheel_speeds.squeeze(1)
 
         if battery_percentages.dim() != 1:
             battery_percentages = battery_percentages.expand_as(masses)
@@ -111,7 +112,7 @@ class SatsimEnvironment(BaseEnvironment):
         for idx, satellite in enumerate(self._simulator.satellites):
             r_BP_N = position_BP_N[idx].cpu().numpy()
             v_BP_N = velocity_BP_N[idx].cpu().numpy()
-            orbital_elements = orbitalMotion.rv2elem(
+            orbital_elements = rv2elem(
                 constants.MU_EARTH * 1e9,
                 r_BP_N,
                 v_BP_N,
@@ -120,11 +121,11 @@ class SatsimEnvironment(BaseEnvironment):
             # we convert them to float to avoid fp precision conflict
             orbit = Orbit(
                 satellite.orbit_id,
-                float(orbital_elements.e),
-                float(orbital_elements.a),
-                orbital_elements.i / macros.D2R,
-                orbital_elements.Omega / macros.D2R,
-                orbital_elements.omega / macros.D2R,
+                orbital_elements['e'],
+                orbital_elements['a'],
+                orbital_elements['i'] * R2D,
+                orbital_elements['Omega'] * R2D,
+                orbital_elements['omega'] * R2D,
             )
 
             sensor = Sensor(
@@ -162,7 +163,7 @@ class SatsimEnvironment(BaseEnvironment):
                 battery,
                 reaction_wheels,
                 satellite.mrp_control,
-                orbital_elements.f / macros.D2R,
+                orbital_elements['f'] * R2D,
                 tuple(attitude_BN[idx].tolist()),
             )
             satellites.append(socket_satellite)

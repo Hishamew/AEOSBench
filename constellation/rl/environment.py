@@ -2,8 +2,8 @@ __all__ = [
     'Environment',
 ]
 
-from functools import partial
 import random
+from functools import partial
 from typing import Any, Literal, TypedDict, cast, overload
 from typing_extensions import Self
 
@@ -13,20 +13,18 @@ import numpy as np
 import numpy.typing as npt
 import torch
 from gymnasium import spaces
-from constellation import STATISTICS_PATH
-from constellation.new_transformers import Statistics
-from constellation.new_transformers import SATELLITE_DIM, TASK_DIM
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from todd.patches.py_ import json_load
-from constellation.new_transformers.model import GLOBALS
 
 from constellation import (
     ANNOTATIONS_ROOT,
     CONSTELLATIONS_ROOT,
     DATA_ROOT,
     MAX_TIME_STEP,
+    STATISTICS_PATH,
     TASKSETS_ROOT,
     TIMESTAMP,
+    TaskManager,
 )
 from constellation.data import (
     Action,
@@ -36,14 +34,15 @@ from constellation.data import (
     Task,
     TaskSet,
 )
-from constellation.environments import BasiliskEnvironment
+from constellation.environments import SatsimEnvironment
 from constellation.evaluators import (
     BaseEvaluator,
     CompletionRateEvaluator,
-    TurnAroundTimeEvaluator,
     PowerUsageEvaluator,
+    TurnAroundTimeEvaluator,
 )
-from constellation import TaskManager
+from constellation.new_transformers import SATELLITE_DIM, TASK_DIM, Statistics
+from constellation.new_transformers.model import GLOBALS
 
 MAX_NUM_SATELLITES = 51
 MAX_NUM_TASKS = 302  # TODO check 301
@@ -328,7 +327,7 @@ class Environment(gym.Env[Observation, npt.NDArray[np.uint16]]):
         )
         tasks: TaskSet[Task] = TaskSet.load(str(taskset_path))
 
-        simulator = BasiliskEnvironment(
+        simulator = SatsimEnvironment(
             start_time=0,
             end_time=MAX_TIME_STEP,
             standard_time_init=TIMESTAMP,
