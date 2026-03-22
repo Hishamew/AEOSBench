@@ -1,16 +1,14 @@
 __all__ = [
     'Observation',
-    'VecController',
+    'VecEnv',
     'VecAlgorithm',
 ]
 from abc import ABC, abstractmethod
-from typing import Iterable, TypedDict
+from typing import TypedDict
 
 import torch
+from todd.runners import Memo
 from torch import nn
-
-from ..controller import Controller
-from ..data.actions import Actions
 
 
 class Observation(TypedDict):
@@ -24,10 +22,24 @@ class Observation(TypedDict):
     tasks_data: torch.Tensor
 
 
-class VecController(ABC):
+class VecEnv(ABC):
 
     def __init__(self, num_controllers: int) -> None:
         self._num_controllers = num_controllers
+
+    @property
+    @abstractmethod
+    def controllers_memo(self) -> list[Memo]:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def all_done(self) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset(self) -> None:
+        raise NotImplementedError
 
     @abstractmethod
     def step(

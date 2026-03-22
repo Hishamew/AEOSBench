@@ -1,20 +1,18 @@
 __all__ = [
-    'QueueController',
+    'DummyVecControllerEnv',
 ]
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
-import einops
 import torch
 from todd.runners import Memo
 
-from ..controller import Controller
-from ..data.actions import Actions
-from .base import Observation, VecController
+from .base import Observation, VecEnv
+from .controller_wrapper import ControllerWrapper
 
 
 class QueuedMemoBound:
 
-    def __init__(self, instance: 'QueueController'):
+    def __init__(self, instance: 'DummyVecControllerEnv'):
         self._instance = instance
 
     def __getitem__(self, key: str) -> object:
@@ -36,7 +34,7 @@ class QueuedMemo:
 
     def __get__(
         self,
-        instance: 'QueueController',
+        instance: 'DummyVecControllerEnv',
         owner,
     ) -> QueuedMemoBound:
         if instance is None:
@@ -44,25 +42,27 @@ class QueuedMemo:
         return QueuedMemoBound(instance)
 
 
-class QueueController(VecController):
+class DummyVecControllerEnv(VecEnv):
     _controllers_memo = QueuedMemo()
 
-    def __init__(self, controllers: Iterable[Controller]):
-        self._controllers = list(controllers)
+    def __init__(
+        self,
+        controllers_fn: Iterable[Callable[[], ControllerWrapper]],
+    ) -> None:
+        self._controllers = [fn() for fn in controllers_fn]
         super().__init__(num_controllers=len(self._controllers))
-        self._memo: Memo = dict()
 
     @property
-    def controllers(self) -> list[Controller]:
+    def controllers(self) -> list[ControllerWrapper]:
         return self._controllers
-
-    @property
-    def memo(self) -> Memo:
-        return self._memo
 
     @property
     def controllers_memo(self) -> QueuedMemoBound:
         return self._controllers_memo
+
+    @property
+    def all_done(self) -> bool:
+        return all(controller.all_done for controller in self.controllers)
 
     def step(
         self,
@@ -72,15 +72,15 @@ class QueueController(VecController):
             self.controllers,
             task_indices.unbind(0),
         ):
-            controller.step_with_task_indices(task_assignment)
+            controller.step(task_assignment)
+            if controller.terminated or controller.truncated:
+                controller.reset()
 
     def get_observations(self) -> list[Observation]:
         observations = []
-        for controller, static_observation in zip(
-            self.controllers,
-            self._memo['static_constellation_observations'],
-        ):
+        for controller in self.controllers:
             observation = controller.get_observation()
-            observations.append(observation)
+            if observation is not None:
+                observations.append(observation)
 
         return observations

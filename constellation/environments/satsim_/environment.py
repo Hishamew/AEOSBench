@@ -224,7 +224,7 @@ class SatsimEnvironment(BaseEnvironment):
         task_indices: torch.Tensor,
         tasks: TaskSet,
     ) -> None:
-        task_indices = task_indices[:self.num_satellites]
+        assert task_indices.shape == (self.num_satellites, )
         valid_tasks = tasks
         with_target = (task_indices != -1) & (task_indices < len(valid_tasks))
 
