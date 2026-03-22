@@ -1,0 +1,51 @@
+__all__ = [
+    'Observation',
+    'VecController',
+    'VecAlgorithm',
+]
+from abc import ABC, abstractmethod
+from typing import Iterable, TypedDict
+
+import torch
+from torch import nn
+
+from ..controller import Controller
+from ..data.actions import Actions
+
+
+class Observation(TypedDict):
+    num_satellites: int
+    num_tasks: int
+    time_step: int
+    constellation_sensor_type: torch.Tensor
+    constellation_sensor_enabled: torch.Tensor
+    constellation_data: torch.Tensor
+    tasks_sensor_type: torch.Tensor
+    tasks_data: torch.Tensor
+
+
+class VecController(ABC):
+
+    def __init__(self, num_controllers: int) -> None:
+        self._num_controllers = num_controllers
+
+    @abstractmethod
+    def step(
+        self,
+        task_indices: torch.Tensor,
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_observations(self) -> list[Observation]:
+        raise NotImplementedError
+
+
+class VecAlgorithm(nn.Module, ABC):
+
+    @abstractmethod
+    def step(
+        self,
+        observations: list[Observation],
+    ) -> torch.Tensor:
+        pass

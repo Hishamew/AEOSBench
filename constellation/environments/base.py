@@ -57,3 +57,21 @@ class BaseEnvironment(ABC):
     @abstractmethod
     def get_earth_rotation(self) -> torch.Tensor:
         pass
+
+    @abstractmethod
+    def get_observation(
+        self
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        pass
+
+    @abstractmethod
+    def take_actions_with_tensor(
+        self,
+        task_indices: torch.Tensor,
+        tasks: TaskSet,
+    ) -> None:
+        pass

@@ -2,6 +2,7 @@ __all__ = [
     'SatsimEnvironment',
 ]
 
+import einops
 import todd
 import torch
 from satsim.architecture import Timer, constants
@@ -18,7 +19,7 @@ from ...data.constellations import (
 )
 from ..base import BaseEnvironment
 from .constellation import SatsimConstellation
-from .utils import rv2elem
+from .utils import rv2elem, rv2elem_torch
 
 
 class SatsimEnvironment(BaseEnvironment):
@@ -32,7 +33,6 @@ class SatsimEnvironment(BaseEnvironment):
         backend: torch.device | None = None,
         fp_precision: torch.dtype = torch.float64,
         reset_trigger_threshold: float = 1e-4,
-        spice_kernel_dir: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -60,12 +60,20 @@ class SatsimEnvironment(BaseEnvironment):
         self._authentic_timer.reset()
         self._simulator_state_dict = self._simulator.reset()
         self.previous_targets = [None for _ in range(self.num_satellites)]
+        self._task_ids = torch.tensor(
+            [-1 for _ in range(self.num_satellites)],
+            device=self._backend,
+        )
 
         self._simulator_state_dict = dict_recursive_apply(
             self._simulator_state_dict,
             lambda x: x.to(self._backend, dtype=torch.float64),
         )
         self._simulator.to(self._backend, dtype=torch.float64)
+
+    @property
+    def current_task_id(self) -> torch.Tensor:
+        return self._task_ids
 
     @property
     def previous_targets(self) -> list[Coordinate | None]:
@@ -110,7 +118,8 @@ class SatsimEnvironment(BaseEnvironment):
             battery_percentages = battery_percentages.expand_as(masses)
 
         for idx, satellite in enumerate(self._simulator.satellites):
-            r_BP_N = position_BP_N[idx].cpu().numpy()
+            r_BP_N = position_BP_N[idx].cpu().numpy(
+            )  # TODO: change to torch version
             v_BP_N = velocity_BP_N[idx].cpu().numpy()
             orbital_elements = rv2elem(
                 constants.MU_EARTH * 1e9,
@@ -173,9 +182,7 @@ class SatsimEnvironment(BaseEnvironment):
             for satellite in satellites
         })
 
-    def _reset_integrators(self, need_reset: list[bool]) -> None:
-        need_reset_mask = torch.tensor(need_reset, device=self._backend)
-
+    def _reset_integrators(self, need_reset_mask: torch.Tensor) -> None:
         integral_sigma = self._simulator_state_dict['_mrp_control'][
             'integral_sigma']
         integral_sigma = torch.where(
@@ -205,10 +212,49 @@ class SatsimEnvironment(BaseEnvironment):
                 or abs(y - py) > self._reset_trigger_threshold
             )
             reset_flags.append(flag)
-        self._reset_integrators(reset_flags)
+
+        need_reset_mask = torch.tensor(reset_flags, device=self._backend)
+        self._reset_integrators(need_reset_mask)
 
         self.previous_targets = targets
         self._simulator.take_actions(actions)
+
+    def take_actions_with_tensor(
+        self,
+        task_indices: torch.Tensor,
+        tasks: TaskSet,
+    ) -> None:
+        task_indices = task_indices[:self.num_satellites]
+        valid_tasks = tasks
+        with_target = (task_indices != -1) & (task_indices < len(valid_tasks))
+
+        lla = task_indices.new_tensor([
+            task.coordinate for task in valid_tasks
+        ])
+        target_location_LLA = torch.where(
+            with_target[:, None],
+            lla[task_indices.clamp(min=0)],
+            torch.zeros_like(lla),
+        )
+
+        task_ids = task_indices.new_tensor([task.id_ for task in valid_tasks])
+        new_task_ids = torch.where(
+            with_target,
+            task_ids[task_indices.clamp(min=0)],
+            torch.full_like(task_indices, -1),
+        )
+        old_task_ids = self._task_ids
+
+        reset = old_task_ids != new_task_ids
+
+        sensor_enabled = self._simulator.camera_switch
+        toggles = with_target.bitwise_xor(sensor_enabled)
+        self._reset_integrators(reset)
+        self._simulator.take_actions(
+            toggles,
+            target_location_LLA,
+            with_target,
+        )
 
     def step(self) -> None:
         self._simulator_state_dict, _ = self._simulator(
@@ -239,4 +285,67 @@ class SatsimEnvironment(BaseEnvironment):
 
     def get_earth_rotation(self) -> torch.Tensor:
         earth_ephmeris = self._simulator.get_earth_ephemeris(None)
-        return earth_ephmeris['direction_cosine_matrix_CN'].squeeze()
+        return einops.rearrange(
+            earth_ephmeris['direction_cosine_matrix_CN'], '1 n m -> n m'
+        )
+
+    def get_observation(
+        self
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        battery_percentages = self._simulator_state_dict['_battery'][
+            'stored_charge_percentage']
+        reaction_wheel_speeds: torch.Tensor = self._simulator_state_dict[
+            '_spacecraft']['_state_effectors']['_reaction_wheels'][
+                'dynamic_params']['angular_velocity']
+        reaction_wheel_speeds = einops.rearrange(
+            reaction_wheel_speeds, 'ns 1 nw -> ns nw'
+        )
+
+        position_BP_N = self._simulator_state_dict['_spacecraft']['_hub'][
+            'dynamic_params']['position_BP_N']
+        velocity_BP_N = self._simulator_state_dict['_spacecraft']['_hub'][
+            'dynamic_params']['velocity_BP_N']
+        orbital_elements = rv2elem_torch(
+            constants.MU_EARTH * 1e9,
+            position_BP_N,
+            velocity_BP_N,
+        )
+        # orbit_dynamic = torch.stack(
+        #     [
+        #         orbital_elements['e'],
+        #         orbital_elements['a'],
+        #         orbital_elements['i'] * R2D,
+        #         orbital_elements['Omega'] * R2D,
+        #         orbital_elements['omega'] * R2D,
+        #         orbital_elements['f'] * R2D,
+        #     ],
+        #     dim=1,
+        # )
+        attitude_BN = self._simulator_state_dict['_spacecraft']['_hub'][
+            'dynamic_params']['attitude_BN']
+
+        dynamic_data = torch.cat(
+            [
+                einops.rearrange(battery_percentages, 'ns -> ns 1'),
+                reaction_wheel_speeds,
+                einops.rearrange(orbital_elements['f'] * R2D, 'ns -> ns 1'),
+                attitude_BN,
+            ],
+            dim=1,
+        )
+
+        sensor_type, static_data = self._constellation_data.static_to_tensor()
+
+        data = torch.cat(
+            [
+                static_data,
+                dynamic_data,
+            ],
+            dim=1,
+        )
+
+        return (
+            sensor_type,
+            self._simulator.camera_switch,
+            data,
+        )

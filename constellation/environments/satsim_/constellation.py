@@ -368,12 +368,12 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
 
     def take_actions(
         self,
-        actions: Actions,
+        toggle: torch.Tensor,
+        target_location_LLA: torch.Tensor,
+        with_target: torch.Tensor,
     ) -> None:
-        toggle, with_target, target = actions.to_tensors()
-        latitude, longitude = target.unbind(-1)
+        latitude, longitude = target_location_LLA.unbind(-1)
         self._turn_switch(toggle)
-
         position_LP_P = LLA2PCPF(
             latitude,
             longitude,

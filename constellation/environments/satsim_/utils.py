@@ -1,4 +1,5 @@
 import math
+from collections import OrderedDict
 from datetime import datetime
 from typing import TypedDict
 
@@ -170,3 +171,108 @@ def rv2elem(mu: float, rVec: np.ndarray, vVec: np.ndarray) -> ClassicElements:
         "omega": (omega),
         "f": f,
     }
+
+
+def rv2elem_torch(
+    mu: float,
+    rVec: torch.Tensor,
+    vVec: torch.Tensor,
+) -> OrderedDict[str, torch.Tensor]:
+    """
+    Converts inertial Cartesian position and velocity vectors into classical orbital elements (PyTorch version).
+    Supports batch inputs (rVec, vVec can be shape (3,) or (B, 3)).
+    """
+    # Angular momentum
+    hVec = torch.linalg.cross(rVec, vVec, dim=-1)
+    h = torch.linalg.norm(hVec, dim=-1)
+
+    # Node vector
+    # k = [0, 0, 1] broadcasted to shape of rVec
+    k = torch.zeros_like(rVec)
+    k[..., 2] = 1.0
+    nVec = torch.linalg.cross(k, hVec, dim=-1)
+    n = torch.linalg.norm(nVec, dim=-1)
+
+    # Position and velocity magnitudes
+    r = torch.linalg.norm(rVec, dim=-1)
+    v = torch.linalg.norm(vVec, dim=-1)
+
+    # Eccentricity vector
+    # eVec = (1/mu) * ((v^2 - mu/r) * rVec - (rVec . vVec) * vVec)
+    rv_dot = (rVec * vVec).sum(dim=-1, keepdim=True)
+    term1 = (v**2 - mu / r).unsqueeze(-1)
+    eVec = (1.0 / mu) * (term1 * rVec - rv_dot * vVec)
+    e = torch.linalg.norm(eVec, dim=-1)
+
+    # Specific mechanical energy
+    energy = v**2 / 2 - mu / r
+
+    # Semi-major axis
+    # Handle parabolic case (energy ~ 0) to avoid division by zero
+    mask_parabolic = torch.abs(energy) < 1e-10
+    safe_energy = torch.where(mask_parabolic, torch.ones_like(energy), energy)
+    a = -mu / (2 * safe_energy)
+    a = torch.where(
+        mask_parabolic,
+        torch.tensor(float("inf"), device=a.device, dtype=a.dtype),
+        a,
+    )
+
+    # Inclination
+    # Clip to handle numerical noise
+    cos_i = torch.clamp(hVec[..., 2] / h, -1.0, 1.0)
+    i = torch.acos(cos_i)
+
+    # Thresholds
+    EPS = 1e-11
+
+    # Right Ascension of Ascending Node (Omega)
+    # If n > EPS, Omega = atan2(ny, nx), else 0
+    Omega = torch.atan2(nVec[..., 1], nVec[..., 0])
+    Omega = torch.where(n > EPS, Omega, torch.zeros_like(Omega))
+
+    # Argument of Periapsis (omega) and True Anomaly (f)
+    # Determine reference vector (node_ref)
+    # If inclined (n > EPS), use nVec. Else use inertial X-axis.
+    x_axis = torch.zeros_like(rVec)
+    x_axis[..., 0] = 1.0
+    mask_inclined = (n > EPS).unsqueeze(-1)
+    node_ref = torch.where(mask_inclined, nVec, x_axis)
+
+    # Check for circular orbit
+    mask_eccentric = e > EPS
+
+    # Omega calculation (Argument of Periapsis)
+    # Angle from node_ref to eVec
+    # sin_omega = dot(cross(node_ref, eVec), hVec) / h
+    cross_ne = torch.linalg.cross(node_ref, eVec, dim=-1)
+    sin_omega = (cross_ne * hVec).sum(dim=-1) / h
+    cos_omega = (node_ref * eVec).sum(dim=-1)
+    omega = torch.atan2(sin_omega, cos_omega)
+    # If circular, omega is conventionally 0
+    omega = torch.where(mask_eccentric, omega, torch.zeros_like(omega))
+
+    # True Anomaly (f)
+    # If eccentric: angle from eVec to rVec
+    # If circular: angle from node_ref to rVec
+    vec_ref_f = torch.where(mask_eccentric.unsqueeze(-1), eVec, node_ref)
+
+    cross_ref_r = torch.linalg.cross(vec_ref_f, rVec, dim=-1)
+    sin_f = (cross_ref_r * hVec).sum(dim=-1) / h
+    cos_f = (vec_ref_f * rVec).sum(dim=-1)
+    f = torch.atan2(sin_f, cos_f)
+
+    # Normalize angles to [0, 2pi)
+    two_pi = 2 * torch.pi
+    Omega = (Omega + two_pi) % two_pi
+    omega = (omega + two_pi) % two_pi
+    f = (f + two_pi) % two_pi
+
+    return OrderedDict({
+        "a": a,
+        "e": e,
+        "i": i,
+        "Omega": Omega,
+        "omega": omega,
+        "f": f,
+    })

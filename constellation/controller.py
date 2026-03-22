@@ -5,6 +5,8 @@ __all__ = [
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import einops
+import torch
 from todd.runners import Memo
 from tqdm import trange
 
@@ -12,6 +14,7 @@ from .algorithms import BaseAlgorithm, OptimalAlgorithm
 from .constants import MAX_TIME_STEP
 from .data import Actions, Constellation, TaskSet
 from .environments import BaseEnvironment
+from .eval.base import Observation
 from .task_managers import TaskManager
 
 if TYPE_CHECKING:
@@ -100,6 +103,61 @@ class Controller:
             self.step(actions, assignment)
 
         self._callbacks.after_run()
+
+    def get_observation(self) -> Observation:
+        env = self.environment
+        (
+            constellation_sensor_type,
+            constellation_sensor_enabled,
+            constellation_data,
+        ) = env.get_observation()
+        time_step = env.timer.time
+
+        task_manager = self.task_manager
+
+        valid_tasks = task_manager.ongoing_tasks
+        valid_labels = task_manager.ongoing_flags
+
+        sensor_type, static_data = valid_tasks.to_tensor()
+
+        static_data = static_data.clone()
+        static_data[..., 0] -= time_step
+        static_data[..., 1] -= time_step
+
+        progress = task_manager.progress[valid_labels]
+        dynamic_data = einops.rearrange(progress, 'nt -> nt 1')
+        tasks_data = torch.cat([static_data, dynamic_data], -1)
+        observation = Observation(
+            num_satellites=env.num_satellites,
+            num_tasks=task_manager.num_ongoing_tasks,
+            time_step=time_step,
+            constellation_sensor_type=constellation_sensor_type,
+            constellation_sensor_enabled=constellation_sensor_enabled,
+            constellation_data=constellation_data,
+            tasks_sensor_type=sensor_type - 1,
+            tasks_data=tasks_data,
+        )
+        return observation
+
+    def step_with_task_indices(self, task_indices: torch.Tensor) -> None:
+        self._memo['task_indices'] = task_indices
+        self._memo['ongoing_tasks'] = self._task_manager.ongoing_tasks
+
+        self._callbacks.before_step()
+
+        is_visible = self._environment.is_visible(self._task_manager.taskset)
+        self._memo['is_visible'] = is_visible
+        self._task_manager.record(is_visible)
+
+        self._environment.take_actions_with_tensor(
+            task_indices=task_indices,
+            tasks=self._task_manager.ongoing_tasks,
+        )
+
+        self._callbacks.after_step()
+
+        self._environment.timer.step()
+        self._environment.step()
 
 
 def main() -> None:
