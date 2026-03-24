@@ -251,24 +251,19 @@ class SatsimEnvironment(BaseEnvironment):
         valid_tasks = tasks
         with_target = (task_indices != -1) & (task_indices < len(valid_tasks))
 
-        lla = task_indices.new_tensor([
-            task.coordinate for task in valid_tasks
+        target_location_LLA = self._simulator.tracking_target.new_tensor([
+            (0., 0.) if i == -1 or i >= len(tasks) else tasks[i].coordinate
+            for i in task_indices
         ])
-        target_location_LLA = torch.where(
-            with_target[:, None],
-            lla[task_indices.clamp(min=0)],
-            torch.zeros_like(lla),
-        )
 
-        task_ids = task_indices.new_tensor([task.id_ for task in valid_tasks])
-        new_task_ids = torch.where(
-            with_target,
-            task_ids[task_indices.clamp(min=0)],
-            torch.full_like(task_indices, -1),
-        )
+        new_task_ids = task_indices.new_tensor([
+            -1 if i == -1 or i >= len(tasks) else tasks[i].id_
+            for i in task_indices
+        ])
         old_task_ids = self._task_ids
 
         reset = old_task_ids != new_task_ids
+        self._task_ids = new_task_ids
 
         sensor_enabled = self._simulator.camera_switch
         toggles = with_target.bitwise_xor(sensor_enabled)

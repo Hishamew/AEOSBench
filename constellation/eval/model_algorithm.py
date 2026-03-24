@@ -38,10 +38,12 @@ class ModelAlgorithm(VecAlgorithm):
         super().__init__(*args, **kwargs)
 
         self.actor = Model()
+        self._model_dtype = next(self.actor.parameters()).dtype
 
         self._statistics: Statistics = torch.load(
             STATISTICS_PATH,
             weights_only=False,
+            map_location=torch.get_default_device(),
         )
         self._greedy = greedy
 
@@ -93,13 +95,13 @@ class ModelAlgorithm(VecAlgorithm):
         ) < einops.rearrange(num_tasks, 'nt -> nt 1')
 
         return Batch(
-            time_step=torch.tensor(obs['time_step'] for obs in observations),
+            time_step=torch.tensor([obs['time_step'] for obs in observations]),
             constellation_sensor_type=constellation_sensor_type,
             constellation_sensor_enabled=constellation_sensor_enabled.int(),
-            constellation_data=constellation_data,
+            constellation_data=constellation_data.to(self._model_dtype),
             constellation_mask=mask,
             tasks_sensor_type=task_sensor_type,
-            tasks_data=tasks_data,
+            tasks_data=tasks_data.to(self._model_dtype),
             tasks_mask=task_mask,
         )
 

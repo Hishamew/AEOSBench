@@ -5,6 +5,7 @@ import pathlib
 
 import einops
 import pandas as pd
+import todd
 import torch
 from todd.patches.py_ import json_load
 from todd.runners import Memo
@@ -66,6 +67,7 @@ class ControllerWrapper:
         self._controller: Controller | None = None
         self._last_num_succeeded_tasks = 0
         self._counter = -1
+        self._device = 'cuda' if todd.Store.cuda else 'cpu'
 
         self._gen_trajectory_dir = gen_trajectory_dir
 
@@ -153,9 +155,10 @@ class ControllerWrapper:
         _controller = self._require_controller()
 
         task_indices = task_indices[:_controller.environment.num_satellites]
-        _controller.memo['task_indices'] = task_indices
         _controller.memo['ongoing_tasks'
                          ] = _controller.task_manager.ongoing_tasks
+        # FIXME: ControllerWrapper can never be used for annatation
+        _controller.memo['assignment'] = task_indices
 
         _controller.callbacks.before_step()
 
@@ -177,9 +180,11 @@ class ControllerWrapper:
 
     def _skip_idle(self) -> None:
         _controller = self._require_controller()
+
         idle_action = torch.full(
             (_controller.environment.num_satellites, ),
             -1,
+            device=self._device,
         )
 
         while _controller.task_manager.is_idle:

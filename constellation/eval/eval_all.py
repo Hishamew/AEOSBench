@@ -71,7 +71,7 @@ if __name__ == '__main__':
     )
 
     device = torch.device(int(os.environ['RANK']) % torch.cuda.device_count())
-    torch.cuda.set_device(device)
+    torch.set_default_device(device)
 
     policy = ModelAlgorithm(greedy=True)
     if args.load_model_from != []:
