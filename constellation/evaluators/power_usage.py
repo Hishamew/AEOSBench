@@ -3,6 +3,7 @@ __all__ = [
 ]
 
 import torch
+
 from .base import BaseEvaluator
 
 

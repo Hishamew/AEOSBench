@@ -1,10 +1,10 @@
 __all__ = [
     'ControllerWrapper',
 ]
-import random
-from typing import Any
+import pathlib
 
 import einops
+import pandas as pd
 import torch
 from todd.patches.py_ import json_load
 from todd.runners import Memo
@@ -25,13 +25,38 @@ from ..evaluators import (
     PowerUsageEvaluator,
     TurnAroundTimeEvaluator,
 )
+from ..loggers import EvalLogger
 from ..task_managers import TaskManager
+
+COMPLETION_RATE_THRESHOLD = 0.01
 
 
 class ControllerWrapper:
 
-    def __init__(self, split: str) -> None:
+    def __init__(
+        self,
+        split: str,
+        rank: int,
+        world_size: int,
+        retry_from: pathlib.Path | None = None,
+        gen_trajectory_dir: pathlib.Path | None = None,
+    ) -> None:
+        """ Eval Controller Wrapper
+        Args:
+            split(str): The dataset split to use, e.g., 'test'.
+            rank(int): The rank of the index of the current environment..
+            world_size(int): The total number of parallel environments in distributed evaluation.
+            retry_from(pathlib.Path): If provided, only evaluate the instances whose completion rate is below the threshold in the given CSV file.
+            gen_trajectory_dir(str): If provided, save the generated trajectories to this directory.
+        """
+
         self._split = split
+
+        # Here rank and world_size is not the same as RANK and WORLD_SIZE in distributed training.
+        # here world_size refers to the number of parallel environments
+        # and rank refers to the index of the current environment.
+        self._rank = rank
+        self._world_size = world_size
 
         self._annotations: list[int] = json_load(
             str(ANNOTATIONS_ROOT / f'{split}.json'),
@@ -40,6 +65,26 @@ class ControllerWrapper:
         self._episode_step = 0
         self._controller: Controller | None = None
         self._last_num_succeeded_tasks = 0
+        self._counter = -1
+
+        self._gen_trajectory_dir = gen_trajectory_dir
+
+        if retry_from is not None:
+            df = pd.read_csv(
+                retry_from,
+                names=['id', 'completion_rate'],
+                index_col='id',
+            )
+            completion_rates: dict[int, float] = \
+                df['completion_rate'].to_dict()
+            self._annotations = [
+                annotation for annotation in self._annotations if
+                completion_rates.get(annotation, 0) < COMPLETION_RATE_THRESHOLD
+            ]
+
+    @property
+    def _index(self) -> int:
+        return self._counter * self._world_size + self._rank
 
     def _require_controller(self) -> Controller:
         if self._controller is None:
@@ -141,9 +186,16 @@ class ControllerWrapper:
             self._take_actions(idle_action)
 
     def _get_annotation(self) -> int:
-        return random.choice(self._annotations['ids'])
+        return self._annotations[self._index]
 
     def reset(self) -> None:
+        if self._counter != -1 and not self.all_done:
+            id_ = self._get_annotation()
+            save_dir = self._gen_trajectory_dir / f'{id_ // 1000:02d}'
+            save_dir.mkdir(parents=True, exist_ok=True)
+
+        self._counter += 1
+
         if self.all_done:
             return
 
@@ -152,7 +204,6 @@ class ControllerWrapper:
 
         self._episode_step = 0
         id_ = self._get_annotation()
-        self.memo['current_id'] = id_
 
         constellation_path = (
             CONSTELLATIONS_ROOT / self._split / f'{id_ // 1000:02}'
@@ -178,12 +229,13 @@ class ControllerWrapper:
         )
         self._last_num_succeeded_tasks = 0
 
-        evaluators = [
+        evalcallbacks = [
             CompletionRateEvaluator(),
             TurnAroundTimeEvaluator(),
             PowerUsageEvaluator(),
+            EvalLogger(work_dir=self._gen_trajectory_dir)
         ]
-        callbacks = ComposedCallback(callbacks=evaluators)
+        callbacks = ComposedCallback(callbacks=evalcallbacks)
 
         self._controller = Controller(
             name='test',
@@ -191,6 +243,7 @@ class ControllerWrapper:
             task_manager=task_manager,
             callbacks=callbacks,
         )
+        self.memo['current_id'] = id_
 
         callbacks.before_run()
         self._skip_idle()

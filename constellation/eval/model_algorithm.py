@@ -3,7 +3,7 @@ __all__ = [
     'Batch',
 ]
 
-from typing import TYPE_CHECKING, Any, Iterable, Mapping, NamedTuple
+from typing import Any, Mapping, NamedTuple
 
 import einops
 import todd
@@ -12,13 +12,8 @@ from torch.distributions import Categorical
 from torch.nn.utils.rnn import pad_sequence
 
 from ..constants import STATISTICS_PATH
-from ..data import Action, Actions, Constellation, TaskSet
-from ..environments import BaseEnvironment
-from ..task_managers import TaskManager
+from ..new_transformers import Model, Statistics
 from .base import Observation, VecAlgorithm
-
-if TYPE_CHECKING:
-    from ..new_transformers import Model, Statistics
 
 
 class Batch(NamedTuple):
@@ -52,16 +47,6 @@ class ModelAlgorithm(VecAlgorithm):
 
         if todd.Store.cuda:
             self.cuda()
-
-    def prepare(
-        self,
-        environments: Iterable[BaseEnvironment],
-        task_managers: Iterable[TaskManager],
-    ) -> None:
-        self._task_managers = list(task_managers)
-        self._num_satellites = [
-            environment.num_satellites for environment in environments
-        ]
 
     def _extract_features(
         self,

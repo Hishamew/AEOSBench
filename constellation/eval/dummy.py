@@ -84,3 +84,7 @@ class DummyVecControllerEnv(VecEnv):
                 observations.append(observation)
 
         return observations
+
+    def reset(self) -> None:
+        for controller in self.controllers:
+            controller.reset()
