@@ -215,9 +215,32 @@ class SatsimEnvironment(BaseEnvironment):
 
         need_reset_mask = torch.tensor(reset_flags, device=self._backend)
         self._reset_integrators(need_reset_mask)
-
         self.previous_targets = targets
-        self._simulator.take_actions(actions)
+
+        toggles = torch.tensor(
+            [a.toggle for a in actions],
+            device=self._backend,
+            dtype=torch.bool,
+        )
+        target_LLA = torch.tensor(
+            [
+                a.target_location if a.target_location is not None else
+                (0., 0.) for a in actions
+            ],
+            device=self._backend,
+            dtype=self._fp_precision,
+        )
+        with_target = torch.tensor(
+            [a.target_location is not None for a in actions],
+            device=self._backend,
+            dtype=torch.bool,
+        )
+
+        self._simulator.take_actions(
+            toggles,
+            target_LLA,
+            with_target,
+        )
 
     def take_actions_with_tensor(
         self,
