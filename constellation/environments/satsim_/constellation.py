@@ -50,6 +50,7 @@ from satsim.utils import LLA2PCPF, move_to
 from ...data import Constellation, TaskSet
 from ...data.actions import Actions
 from ...data.constellations import Satellites
+from .rw_factory import build_reaction_wheel
 from .utils import UNIT_VECTOR_Z, convert_to_utc, is_utc_datetime_str
 
 
@@ -131,15 +132,20 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
             state_effectors=dict(_reaction_wheels=reaction_wheels),
         )
 
-        # capacity = torch.tensor([
-        #     sat.battery.capacity for sat in self._satellites
-        # ])
-        # percentage_init = torch.tensor([
-        #     sat.battery.percentage for sat in self._satellites
-        # ])
+        capacity = torch.tensor([
+            sat.battery.capacity for sat in self._satellites
+        ])
+        percentage_init = torch.tensor([
+            sat.battery.percentage for sat in self._satellites
+        ])
 
         # TODO: To align simulator behaviors, we use NoBattery here
-        self._battery = NoBattery(timer=self._timer)
+        # self._battery = NoBattery(timer=self._timer)
+        self._battery = SimpleBattery(
+            timer=self._timer,
+            storage_capacity=capacity,
+            stored_charge_percentage_init=percentage_init,
+        )
 
     def _get_new_gravity_field(self, standard_time_init: str) -> GravityField:
         standard_time_init = convert_to_utc(standard_time_init)
@@ -171,27 +177,9 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         reaction_wheels_2 = []
 
         for rw0, rw1, rw2 in reaction_wheels_groups:
-            reaction_wheels_0.append(
-                HoneywellHR12Small.build(
-                    mech_to_elec_efficiency=rw0.efficiency,
-                    base_power=rw0.power,
-                    angular_velocity_init=rw0.rw_speed_init,
-                )
-            )
-            reaction_wheels_1.append(
-                HoneywellHR12Small.build(
-                    mech_to_elec_efficiency=rw1.efficiency,
-                    base_power=rw1.power,
-                    angular_velocity_init=rw1.rw_speed_init,
-                )
-            )
-            reaction_wheels_2.append(
-                HoneywellHR12Small.build(
-                    mech_to_elec_efficiency=rw2.efficiency,
-                    base_power=rw2.power,
-                    angular_velocity_init=rw2.rw_speed_init,
-                )
-            )
+            reaction_wheels_0.append(build_reaction_wheel(rw0))
+            reaction_wheels_1.append(build_reaction_wheel(rw1))
+            reaction_wheels_2.append(build_reaction_wheel(rw2))
 
         reaction_wheel_0 = concat(reaction_wheels_0)
         reaction_wheel_1 = concat(reaction_wheels_1)
