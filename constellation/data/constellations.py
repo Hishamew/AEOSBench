@@ -371,21 +371,16 @@ class Satellite:
         # According to the definition of inertia matrix
         # it must satisfy Triangle inequality constraint
         # i.e. Ixx + Iyy ≥ Izz, Iyy + Izz ≥ Ixx, Izz + Ixx ≥ Iyy
-        Ixx = round(random.uniform(50, 200), 6)
-        Iyy = round(random.uniform(50, 200), 6)
-
-        min_Izz = max(50, abs(Ixx - Iyy))
-        max_Izz = min(200, Ixx + Iyy)
-
-        Izz = round(random.uniform(min_Izz, max_Izz), 6)
-
-        inertias = [Ixx, Iyy, Izz]
-        random.shuffle(inertias)
-
-        inertia: Inertia = (
-            inertias[0], 0, 0, 0, inertias[1], 0, 0, 0, inertias[2]
+        inertia = cast(
+            Inertia,
+            tuple(
+                torch.distributions.Uniform(50, 200)\
+                    .sample((3, ))\
+                    .diag()\
+                    .flatten()\
+                    .tolist()
+            ),
         )
-
         mass = random.uniform(50, 200)
         reaction_wheels = ReactionWheel.sample()
         return cls(
