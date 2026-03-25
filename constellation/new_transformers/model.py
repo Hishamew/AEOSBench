@@ -1,25 +1,24 @@
-from asyncio import tasks
-from typing import Any, Iterable
+from typing import Iterable
+
 import einops
 import todd
 import torch
+from todd.models.losses import CrossEntropyLoss, MSELoss
+from todd.models.modules import sinusoidal_position_embedding
+from todd.models.modules.transformer import Block
+from todd.patches.torch import Sequential
+from todd.registries import InitWeightsMixin
+from todd.runners import BaseRunner, Memo
+from todd.runners.callbacks import TensorBoardCallback
 from torch import nn
 
-from todd.models.modules.transformer import Block
-from todd.models.modules import sinusoidal_position_embedding
-from todd.patches.torch import Sequential
-from todd.models.losses import CrossEntropyLoss, MSELoss
-from todd.registries import InitWeightsMixin
+from constellation import MAX_TIME_STEP
 from constellation.data import SensorType
+
+from .constants import SATELLITE_DIM, TASK_DIM
 from .dataset import Batch
 from .registries import ConstellationModelRegistry
 from .time_model import TimeModel
-from todd.runners import Memo, BaseRunner
-from todd.registries import InitWeightsMixin
-from todd.runners.callbacks import TensorBoardCallback
-from constellation import MAX_TIME_STEP
-from torch.distributions import Categorical
-from .constants import SATELLITE_DIM, TASK_DIM
 
 GLOBALS = dict()
 
@@ -205,13 +204,17 @@ class Decoder(InitWeightsMixin, nn.Module):
         ), -1)
         x = self._in_projector(embedding)
 
-        mask = torch.where(mask, 0, float('-inf'))
-        attention_mask = einops.repeat(
-            mask,
-            'b ns -> (b nh) ns ns_prime',
-            nh=self._num_heads,
-            ns_prime=embedding.shape[1],
+        attention_mask = (
+            einops.rearrange(mask, 'b nt -> b nt 1')
+            & einops.rearrange(mask, 'b nt -> b 1 nt')
         )
+        attention_mask = einops.repeat(
+            attention_mask,
+            'b nt nt_prime -> (b nh) nt nt_prime',
+            nh=self._num_heads,
+        )
+        attention_mask = torch.where(attention_mask, 0, float('-inf'))
+
         cross_attention_mask = einops.repeat(
             tasks_mask,
             'b nt -> b ns nt',
@@ -228,7 +231,6 @@ class Decoder(InitWeightsMixin, nn.Module):
             'b ns nt -> (b nh) ns nt',
             nh=self._num_heads,
         )
-
         x = self._blocks(
             x,
             attention_mask=attention_mask,
@@ -309,7 +311,6 @@ class Transformer(nn.Module):
         self._decoder.requires_grad_(True)
         self._time_projection.requires_grad_(True)
 
-        
     def forward(
         self,
         time_steps: torch.Tensor | Iterable[int],
