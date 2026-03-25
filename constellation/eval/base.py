@@ -4,7 +4,7 @@ __all__ = [
     'VecAlgorithm',
 ]
 from abc import ABC, abstractmethod
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import torch
 from todd.runners import Memo
@@ -27,9 +27,8 @@ class VecEnv(ABC):
     def __init__(self, num_controllers: int) -> None:
         self._num_controllers = num_controllers
 
-    @property
     @abstractmethod
-    def controllers_memo(self) -> list[Memo]:
+    def get_attr(self, name: str) -> list[Any]:
         raise NotImplementedError
 
     @property

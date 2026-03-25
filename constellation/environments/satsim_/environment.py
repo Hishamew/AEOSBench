@@ -342,6 +342,12 @@ class SatsimEnvironment(BaseEnvironment):
         attitude_BN = self._simulator_state_dict['_spacecraft']['_hub'][
             'dynamic_params']['attitude_BN']
 
+        if battery_percentages.dim() != 1:
+            battery_percentages = einops.repeat(
+                battery_percentages,
+                '... -> ... ns',
+                ns=self.num_satellites,
+            )
         dynamic_data = torch.cat(
             [
                 einops.rearrange(battery_percentages, 'ns -> ns 1'),

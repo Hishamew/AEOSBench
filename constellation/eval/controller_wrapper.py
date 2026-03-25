@@ -62,6 +62,10 @@ class ControllerWrapper:
         self._annotations: list[int] = json_load(
             str(ANNOTATIONS_ROOT / f'{split}.json'),
         )['ids']
+        if rank == 0:
+            todd.logger.info(
+                f"Total number of environment to evaluate: {len(self._annotations)}"
+            )
 
         self._episode_step = 0
         self._controller: Controller | None = None
@@ -83,6 +87,14 @@ class ControllerWrapper:
                 annotation for annotation in self._annotations if
                 completion_rates.get(annotation, 0) < COMPLETION_RATE_THRESHOLD
             ]
+
+    @property
+    def rank(self) -> int:
+        return self._rank
+
+    @property
+    def world_size(self) -> int:
+        return self._world_size
 
     @property
     def _index(self) -> int:
@@ -113,7 +125,9 @@ class ControllerWrapper:
         return _controller.memo
 
     def get_observation(self) -> Observation | None:
-        if self.terminated or self.truncated or self.all_done:
+        if self.all_done:
+            return None
+        if self.terminated or self.truncated:
             return None
 
         _controller = self._require_controller()
@@ -194,18 +208,27 @@ class ControllerWrapper:
         return self._annotations[self._index]
 
     def reset(self) -> None:
-        if self._counter != -1 and not self.all_done:
-            id_ = self._get_annotation()
-            save_dir = self._gen_trajectory_dir / f'{id_ // 1000:02d}'
-            save_dir.mkdir(parents=True, exist_ok=True)
+        if self._controller is not None:
+            self._controller.callbacks.after_run()
+            self._controller = None
 
         self._counter += 1
 
         if self.all_done:
             return
 
-        if self._controller is not None:
-            self._controller.callbacks.after_run()
+        id_ = self._get_annotation()
+        while (
+            self._gen_trajectory_dir / f'{id_ // 1000:02d}' / f'{id_:05d}.json'
+        ).exists():
+            todd.logger.info(f"{id_} task has been evaluated, skiping")
+            self._counter += 1
+            if self.all_done:
+                return
+            id_ = self._get_annotation()
+
+        save_dir = self._gen_trajectory_dir / f'{id_ // 1000:02d}'
+        save_dir.mkdir(parents=True, exist_ok=True)
 
         self._episode_step = 0
         id_ = self._get_annotation()

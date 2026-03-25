@@ -60,6 +60,9 @@ class DummyVecControllerEnv(VecEnv):
     def controllers_memo(self) -> QueuedMemoBound:
         return self._controllers_memo
 
+    def get_attr(self, name: str) -> list[Any]:
+        return [getattr(controller, name) for controller in self.controllers]
+
     @property
     def all_done(self) -> bool:
         return all(controller.all_done for controller in self.controllers)
@@ -68,17 +71,18 @@ class DummyVecControllerEnv(VecEnv):
         self,
         task_indices: torch.Tensor,
     ) -> None:
-        for controller, task_assignment in zip(
-            self.controllers,
-            task_indices.unbind(0),
-        ):
-            controller.step(task_assignment)
+        n = 0
+        for controller in self.controllers:
+            if controller.all_done:
+                continue
+            controller.step(task_indices[n])
+            n += 1
             if controller.terminated or controller.truncated:
                 controller.reset()
 
     def get_observations(self) -> list[Observation]:
         observations = []
-        for controller in self.controllers:
+        for idx, controller in enumerate(self.controllers):
             observation = controller.get_observation()
             if observation is not None:
                 observations.append(observation)
