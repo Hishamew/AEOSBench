@@ -71,6 +71,7 @@ if __name__ == '__main__':
     )
 
     device = torch.device(int(os.environ['RANK']) % torch.cuda.device_count())
+    torch.cuda.set_device(device)
     torch.set_default_device(device)
 
     policy = ModelAlgorithm(greedy=True)
@@ -98,16 +99,22 @@ if __name__ == '__main__':
 
     environment.reset()
     for i in count():
-        if i % config.log_interval == 0:
-            todd.logger.info("rank %s step %d", os.environ['RANK'], i)
-
-        observations = environment.get_observations()
-        actions = policy.step(observations)
-        environment.step(actions)
-
         if environment.all_done:
             todd.logger.info(
                 "rank %s step %d all done",
                 os.environ['RANK'],
                 i,
             )
+            break
+        if i % config.log_interval == 0:
+            for all_done, rank in zip(
+                environment.get_attr('all_done'),
+                environment.get_attr('rank'),
+            ):
+                todd.logger.info(
+                    f"Env id {rank} step {i}: {'done' if all_done else 'running'}"
+                )
+
+        observations = environment.get_observations()
+        actions = policy.step(observations)
+        environment.step(actions)

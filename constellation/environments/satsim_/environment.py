@@ -154,7 +154,7 @@ class SatsimEnvironment(BaseEnvironment):
                     rw.rw_type,
                     rw.rw_direction,
                     rw.max_momentum,
-                    wheel_speeds_idx[i].item(),
+                    wheel_speeds_idx[i].item() / constants.RPM,
                     rw.power,
                     rw.efficiency,
                 ) for i, rw in enumerate(reaction_wheels)
@@ -351,7 +351,7 @@ class SatsimEnvironment(BaseEnvironment):
         dynamic_data = torch.cat(
             [
                 einops.rearrange(battery_percentages, 'ns -> ns 1'),
-                reaction_wheel_speeds,
+                reaction_wheel_speeds / constants.RPM,
                 einops.rearrange(orbital_elements['f'] * R2D, 'ns -> ns 1'),
                 attitude_BN,
             ],

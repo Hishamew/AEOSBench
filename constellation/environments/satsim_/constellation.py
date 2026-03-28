@@ -2,8 +2,10 @@ __all__ = [
     'SatsimConstellationStateDict',
     'SatsimConstellation',
 ]
+import math
 from typing import TypedDict, TypeVar, cast
 
+import einops
 import torch
 from satsim.architecture import Module, Timer, constants
 from satsim.attitude_control import MRPFeedback, MRPFeedbackStateDict
@@ -231,7 +233,8 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
             dtype=torch.get_default_dtype(),
         )
         half_view = torch.tensor([
-            sat.sensor.half_field_of_view for sat in self._satellites
+            math.radians(sat.sensor.half_field_of_view)
+            for sat in self._satellites
         ])
 
         self._location_pointing = LocationPointing(
@@ -472,12 +475,12 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
     ) -> tuple[SatsimConstellationStateDict, tuple[Ephemeris]]:
         # Start by integrating time to next step
         spacecraft_state_dict = state_dict['_spacecraft']
-        spacecraft_state_dict, spacecraft_output = self.spacecraft(
-            spacecraft_state_dict
-        )
-        spacecraft_state_dict: SpacecraftStateDict
-        spacecraft_output: SpacecraftStateOutput
-        state_dict['_spacecraft'] = spacecraft_state_dict
+        position_BP_N = spacecraft_state_dict['_hub']['dynamic_params'][
+            'position_BP_N']
+        earth_ephemeris = self.get_earth_ephemeris(position_BP_N)
+        position_PN_N = earth_ephemeris['position_CN_N']
+        position_PN_N = einops.rearrange(position_PN_N, '1 n -> n')
+        position_BN_N = position_PN_N + position_BP_N
 
         # get spacecraft state
         attitude_BN = spacecraft_state_dict['_hub']['dynamic_params'][
@@ -512,7 +515,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         ) = self.location_pointing(
             location_pointing_state_dict,
             position_LN_N=position_LN_N,
-            position_BN_N=spacecraft_output.position_BN_N,
+            position_BN_N=position_BN_N,
             attitude_BN=attitude_BN,
             angular_velocity_BN_B=angular_velocity_BN_B,
         )
@@ -545,7 +548,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         factors = compute_shadow_factor(
             sun_ephemeris['position_CN_N'],
             earth_ephemeris['position_CN_N'],
-            spacecraft_output.position_BN_N,
+            position_BN_N,
             torch.tensor([constants.REQ_EARTH * 1e3]).to(attitude_BN.device),
         )
 
@@ -553,7 +556,7 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         solar_panel_state_dict = state_dict['_solar_panel']
         solar_panel_state_dict, (_, battery_state_dict) = self.solar_panel(
             solar_panel_state_dict,
-            position_BN_N=spacecraft_output.position_BN_N,
+            position_BN_N=position_BN_N,
             position_SN_N=sun_ephemeris['position_CN_N'],
             attitude_BN=attitude_BN,
             shadow_factor=factors,
@@ -589,5 +592,12 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         battery_state_dict, _ = self.battery(battery_state_dict)
         battery_state_dict: BatteryStateDict
         state_dict['_battery'] = battery_state_dict
+
+        spacecraft_state_dict, spacecraft_output = self.spacecraft(
+            spacecraft_state_dict
+        )
+        spacecraft_state_dict: SpacecraftStateDict
+        spacecraft_output: SpacecraftStateOutput
+        state_dict['_spacecraft'] = spacecraft_state_dict
 
         return state_dict, (earth_ephemeris, camera_on)
