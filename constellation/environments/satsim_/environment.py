@@ -297,9 +297,11 @@ class SatsimEnvironment(BaseEnvironment):
             self._backend
         )  # [1, n_sc]
         sensor_match = task_sensor_type == satellite_sensor_type
-
-        return (has_access & camera_on
-                & sensor_match).transpose(0, 1).to(torch.get_default_device())
+        visibility = (has_access & camera_on
+                      & sensor_match).transpose(0, 1).to(
+                          torch.get_default_device()
+                      )
+        return visibility
 
     def get_earth_rotation(self) -> torch.Tensor:
         earth_ephmeris = self._simulator.get_earth_ephemeris(None)
@@ -359,6 +361,17 @@ class SatsimEnvironment(BaseEnvironment):
         )
 
         sensor_type, static_data = self._constellation_data.static_to_tensor()
+        # new_orbit = torch.stack(
+        #     [
+        #         orbital_elements['e'],
+        #         orbital_elements['a'],
+        #         orbital_elements['i'] * R2D,
+        #         orbital_elements['Omega'] * R2D,
+        #         orbital_elements['omega'] * R2D,
+        #     ],
+        #     dim=-1,
+        # )
+        # static_data[..., 13:18] = new_orbit
 
         data = torch.cat(
             [

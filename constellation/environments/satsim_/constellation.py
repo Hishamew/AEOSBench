@@ -49,6 +49,7 @@ from satsim.simulation.spacecraft import (
 )
 from satsim.utils import LLA2PCPF, move_to
 
+from ...constants import D2R
 from ...data import Constellation, TaskSet
 from ...data.actions import Actions
 from ...data.constellations import Satellites
@@ -366,8 +367,8 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         latitude, longitude = target_location_LLA.unbind(-1)
         self._turn_switch(toggle)
         position_LP_P = LLA2PCPF(
-            latitude,
-            longitude,
+            latitude * D2R,
+            longitude * D2R,
             torch.zeros_like(latitude),
             constants.REQ_EARTH * 1e3,
             constants.REQ_EARTH * 1e3,

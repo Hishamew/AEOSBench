@@ -157,7 +157,7 @@ class ControllerWrapper:
             num_satellites=env.num_satellites,
             num_tasks=task_manager.num_ongoing_tasks,
             time_step=time_step,
-            constellation_sensor_type=constellation_sensor_type,
+            constellation_sensor_type=constellation_sensor_type - 1,
             constellation_sensor_enabled=constellation_sensor_enabled,
             constellation_data=constellation_data,
             tasks_sensor_type=sensor_type - 1,
@@ -261,7 +261,7 @@ class ControllerWrapper:
             CompletionRateEvaluator(),
             TurnAroundTimeEvaluator(),
             PowerUsageEvaluator(),
-            EvalLogger(work_dir=self._gen_trajectory_dir)
+            EvalLogger(work_dir=self._gen_trajectory_dir),
         ]
         callbacks = ComposedCallback(callbacks=evalcallbacks)
 
