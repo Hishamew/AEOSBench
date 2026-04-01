@@ -1,10 +1,13 @@
 import argparse
 import os
 import pathlib
+import random
+from copy import deepcopy
 
 import todd
 import torch
 import torch.nn as nn
+from satsim.architecture import constants
 
 from constellation import (
     SATELLITES_ROOT,
@@ -22,16 +25,47 @@ from constellation.data import (
     TaskSet,
 )
 from constellation.environments import SatsimEnvironment
-from constellation.evaluators import (
-    CompletionRateEvaluator,
-    PerCompletionRateEvaluator,
-)
+from constellation.evaluators import CompletionRateEvaluator
 
 RANK = int(os.environ['RANK'])
 WORLD_SIZE = int(os.environ['WORLD_SIZE'])
 
 TASKSET_PATH = TASKSETS_ROOT / 'mrp.json'
 TASKSET = TaskSet.load(str(TASKSET_PATH))
+
+
+class InputNormalizer(nn.Module):
+
+    def __init__(
+        self,
+        shape: int | list[int],
+        epsilon: float = 1e-5,
+    ) -> None:
+        super().__init__()
+        shape = [shape] if isinstance(shape, int) else shape
+        self.register_buffer('_running_mean', torch.zeros(*shape))
+        self.register_buffer('_running_var', torch.ones(*shape))
+        self.register_buffer('_count', torch.tensor(epsilon))
+        self._epsilon = epsilon
+
+    @property
+    def running_mean(self) -> torch.Tensor:
+        return self.get_buffer('_running_mean')
+
+    @property
+    def running_var(self) -> torch.Tensor:
+        return self.get_buffer('_running_var')
+
+    @property
+    def count(self) -> torch.Tensor:
+        return self.get_buffer('_count')
+
+    def forward(self, batched_input: torch.Tensor):
+
+        result = (batched_input - self.running_mean
+                  ) / torch.sqrt(self.running_var + self._epsilon)
+
+        return result
 
 
 class MLPPIDConfigure(nn.Module):
@@ -46,16 +80,15 @@ class MLPPIDConfigure(nn.Module):
         self._hidden_dim = hidden_dim
         self._task_invariant = task_invariant
 
-        self.input_projection = nn.Linear(
-            self._input_dim,
-            hidden_dim,
-        )
+        self.input_projection = nn.Linear(self._input_dim, hidden_dim)
         self.mlp = nn.Sequential(
             nn.Linear(hidden_dim, 4 * hidden_dim),
             nn.GELU(),
             nn.Linear(4 * hidden_dim, 3),
         )
-        self._softplus = nn.Softplus()  # linear[-1] -> [0, +oo]
+
+        self._input_normalizer = InputNormalizer(self._input_dim)
+        self._runtime_normalizer = deepcopy(self._input_normalizer)
 
     def forward(
         self,
@@ -71,10 +104,12 @@ class MLPPIDConfigure(nn.Module):
             ],
             dim=-1,
         )
+        feature = self._runtime_normalizer(feature)
+
         x = self.input_projection(feature)
         raw_gains = self.mlp(x)
 
-        pid_gains: torch.Tensor = self._softplus(raw_gains)
+        pid_gains: torch.Tensor = torch.exp(raw_gains)
         return pid_gains
 
 
@@ -84,21 +119,21 @@ def reconfigure_pid(
 ) -> Constellation:
     sc_masses = []
     sc_inertias = []
+    rw_inertias = []
 
-    # fixed rw inertia
-    rw_inertia = 12 / (6000 * 2 * torch.pi / 60)
-    rw_inertias = [rw_inertia, rw_inertia, rw_inertia]
     for satellite in constellation.sort():
         sc_masses.append(satellite.mass)
         sc_inertia = satellite.inertia
         sc_inertia = [sc_inertia[0], sc_inertia[4], sc_inertia[8]]
         sc_inertias.append(torch.tensor(sc_inertia))
-
+        rw_inertia = [
+            rw.max_momentum / (6000 * constants.RPM)
+            for rw in satellite.reaction_wheels
+        ]
+        rw_inertias.append(torch.tensor(rw_inertia))
     sc_masses = torch.tensor(sc_masses)
     sc_inertia = torch.stack(sc_inertias)
-    rw_inertia = torch.tensor(rw_inertias
-                              ).unsqueeze(0).expand(len(constellation), -1)
-
+    rw_inertia = torch.stack(rw_inertias)
     pid_gains: torch.Tensor = configurer(sc_masses, sc_inertia, rw_inertia)
     k, ki, p = pid_gains.unbind(dim=-1)
     ki = ki * 1e-4
@@ -118,7 +153,7 @@ def reconfigure_pid(
                 k=k[i].item(),
                 ki=ki[i].item(),
                 p=p[i].item(),
-                integral_limit=0.1,
+                integral_limit=random.uniform(0.05, 0.2),
             ),
             sat.true_anomaly,
             sat.mrp_attitude_bn,
@@ -194,11 +229,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    configurer = MLPPIDConfigure(hidden_dim=128, task_invariant=True)
-    if todd.Store.cuda:
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
+    configurer = MLPPIDConfigure(hidden_dim=256, task_invariant=True)
+    device = torch.device(RANK % torch.cuda.device_count())
+    torch.cuda.set_device(device)
     configurer.load_state_dict(
         torch.load(args.ckpt, map_location=device),
     )

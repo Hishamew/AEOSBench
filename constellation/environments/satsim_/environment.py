@@ -194,7 +194,6 @@ class SatsimEnvironment(BaseEnvironment):
                                                    ] = integral_sigma
 
     def take_actions(self, actions: Actions) -> None:
-
         reset_flags = []
         targets = [action.target_location for action in actions]
         for p_t, target in zip(self.previous_targets, targets):
@@ -214,7 +213,8 @@ class SatsimEnvironment(BaseEnvironment):
             reset_flags.append(flag)
 
         need_reset_mask = torch.tensor(reset_flags, device=self._backend)
-        self._reset_integrators(need_reset_mask)
+        if need_reset_mask.any():
+            self._reset_integrators(need_reset_mask)
         self.previous_targets = targets
 
         toggles = torch.tensor(
@@ -267,7 +267,8 @@ class SatsimEnvironment(BaseEnvironment):
 
         sensor_enabled = self._simulator.camera_switch
         toggles = with_target.bitwise_xor(sensor_enabled)
-        self._reset_integrators(reset)
+        if reset.any():
+            self._reset_integrators(reset)
         self._simulator.take_actions(
             toggles,
             target_location_LLA,

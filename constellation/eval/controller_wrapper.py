@@ -12,9 +12,9 @@ from todd.runners import Memo
 
 from ..callbacks import ComposedCallback
 from ..constants import (
-    ANNOTATIONS_ROOT,
-    CONSTELLATIONS_ROOT,
-    TASKSETS_ROOT,
+    BENCHMARK_ANNOTATIONS_ROOT,
+    BENCHMARK_CONSTELLATIONS_ROOT,
+    BENCHMARK_TASKSETS_ROOT,
     TIMESTAMP,
 )
 from ..controller import Controller
@@ -60,7 +60,7 @@ class ControllerWrapper:
         self._world_size = world_size
 
         self._annotations: list[int] = json_load(
-            str(ANNOTATIONS_ROOT / f'{split}.json'),
+            str(BENCHMARK_ANNOTATIONS_ROOT / f'{split}.json'),
         )['ids']
         if rank == 0:
             todd.logger.info(
@@ -234,13 +234,13 @@ class ControllerWrapper:
         id_ = self._get_annotation()
 
         constellation_path = (
-            CONSTELLATIONS_ROOT / self._split / f'{id_ // 1000:02}'
+            BENCHMARK_CONSTELLATIONS_ROOT / self._split / f'{id_ // 1000:02}'
             / f'{id_:05}.json'
         )
         constellation = Constellation.load(str(constellation_path))
 
         taskset_path = (
-            TASKSETS_ROOT / self._split / f'{id_ // 1000:02}'
+            BENCHMARK_TASKSETS_ROOT / self._split / f'{id_ // 1000:02}'
             / f'{id_:05}.json'
         )
         tasks: TaskSet = TaskSet.load(str(taskset_path))

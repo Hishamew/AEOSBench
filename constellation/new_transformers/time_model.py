@@ -1,7 +1,8 @@
 import bisect
-from collections import UserList
 import dataclasses
+import pathlib
 import random
+from collections import UserList
 from typing import Any, Iterable, NamedTuple, TypeVar, cast
 
 import einops
@@ -28,6 +29,7 @@ from constellation import (
 )
 from constellation.data import Constellation, TaskSet
 
+from .constants import SATELLITE_DIM, TASK_DIM
 from .dataset import (
     DynamicConstellationData,
     DynamicTasksetData,
@@ -38,9 +40,6 @@ from .registries import (
     ConstellationDatasetRegistry,
     ConstellationModelRegistry,
 )
-from .constants import SATELLITE_DIM, TASK_DIM
-
-import pathlib
 
 # TODO: delete
 TRAJECTORIES_ROOT = pathlib.Path('data/trajectories.tabu.1')
