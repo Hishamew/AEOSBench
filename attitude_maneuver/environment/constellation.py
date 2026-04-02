@@ -5,10 +5,10 @@ __all__ = [
 import torch
 
 from constellation.environments import SatsimConstellation
-
-from ...constellation.environments.satsim_.constellation import (
+from constellation.environments.satsim_.constellation import (
     SatsimConstellationStateDict,
 )
+
 from .learnable_mrp_control import (
     LearnableMRPControl,
     LearnableMRPControlStateDict,

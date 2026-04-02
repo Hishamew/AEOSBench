@@ -355,6 +355,10 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         return self._ground_mapping
 
     @property
+    def guidance_buffer(self) -> GuidanceOutput:
+        return self._guidance_buffer
+
+    @property
     def mrp_control(self) -> MRPFeedback:
         return self._mrp_control
 
@@ -524,6 +528,8 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         guidance: GuidanceOutput
         reference: ReferenceAttitudeOutput
         state_dict['_location_pointing'] = location_pointing_state_dict
+
+        self._guidance_buffer = guidance
 
         mrp_control_state_dict = state_dict['_mrp_control']
         mrp_control_state_dict, (control_torque, _) = self.mrp_control(

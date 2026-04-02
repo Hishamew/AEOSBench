@@ -5,15 +5,18 @@ import logging
 import pathlib
 from collections import defaultdict
 from pprint import pformat
+from typing import TYPE_CHECKING
 
 import todd
 import torch
 from todd.configs import PyConfig
 from todd.runners import Memo
 
-from .callbacks.base import BaseCallback
 from .environment.environment import AttitudeControlEnvironment
 from .model import MLPPIDConfigure
+
+if TYPE_CHECKING:
+    from .callbacks import ComposedCallback
 
 
 class ControllerRunner:
@@ -21,7 +24,7 @@ class ControllerRunner:
     def __init__(
         self,
         model: MLPPIDConfigure,
-        callbacks: BaseCallback,
+        callbacks: 'ComposedCallback',
         config: PyConfig,
         env: AttitudeControlEnvironment,
         optimizer: torch.optim.Optimizer | None = None,
@@ -30,6 +33,7 @@ class ControllerRunner:
         self._optim = optimizer
         self._env = env
         self._memo['work_dir'] = pathlib.Path(config.work_dir)
+        self.work_dir.mkdir(parents=True, exist_ok=True)
 
         callbacks.bind(self)
         self._callbacks = callbacks

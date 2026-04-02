@@ -1,5 +1,7 @@
 import argparse
-from pprint import pformat
+import pathlib
+import sys
+from typing import cast
 
 import torch
 from attitude_maneuver.callbacks import ComposedCallback
@@ -13,11 +15,25 @@ from todd.patches.py_ import DictAction
 from todd.utils import init_seed
 
 
+def log(
+    runner: ControllerRunner,
+    args: argparse.Namespace,
+    config: PyConfig,
+) -> None:
+    runner.logger.info("Command\n" + ' '.join(sys.argv))
+    runner.logger.info(f"Args\n{vars(args)}")
+    runner.logger.info(f"Config\n{config.dumps()}")
+
+    if 'config' in args:
+        config_name = cast(pathlib.Path, args.config).name
+        config.dump(runner.work_dir / config_name)
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'config',
-        type=str,
+        type=pathlib.Path,
         help='Path to the config file.',
     )
     parser.add_argument(
@@ -26,6 +42,11 @@ def parse_args():
         type=str,
         default=None,
         help="Use a specified initial model state dict",
+    )
+    parser.add_argument(
+        '--work-dir',
+        type=pathlib.Path,
+        default=pathlib.Path('./work_dir/test'),
     )
     parser.add_argument('--debug', action='store_true', help='Debug mode.')
     parser.add_argument('--override', action=DictAction, default=dict())
@@ -67,6 +88,7 @@ if __name__ == '__main__':
             type=ComposedCallback.__name__, callbacks=config.runner.callbacks
         )
     )
+    config.runner.work_dir = cast(pathlib.Path, args.work_dir)
 
     trainer = ControllerRunner(
         model,
@@ -75,9 +97,8 @@ if __name__ == '__main__':
         env,
         optimizer,
     )
-    trainer.logger.info(pformat(config))
+    log(trainer, args, config)
 
-    config.dump(trainer.work_dir / 'config.py')
     if args.debug:
         torch.set_anomaly_enabled(True)
 
