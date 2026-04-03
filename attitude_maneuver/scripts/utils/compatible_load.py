@@ -1,6 +1,8 @@
 __all__ = [
     'compatible_load',
 ]
+import math
+
 import torch
 from torch import nn
 
@@ -28,8 +30,7 @@ def compatible_load(
         return
 
     if ki_manual_normalize:
-        state_dict['mlp.2.weight'][1, :] *= 1e-4
-        state_dict['mlp.2.bias'][1] *= 1e-4
+        state_dict['mlp.2.bias'][1] -= 4 * math.log(10.0)
 
     if output_dim == 4 and state_dict_output_dim == 3:
         state_dict['mlp.2.weight'] = torch.cat(

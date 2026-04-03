@@ -15,11 +15,13 @@ class MLPPIDConfigure(nn.Module):
         self,
         hidden_dim: int,
         with_integral_limit: bool = False,
+        ki_manual_normalize: bool = False,
     ) -> None:
         super().__init__()
         self._input_dim = INPUT_DIM
         self._hidden_dim = hidden_dim
         self._output_dim = 4 if with_integral_limit else 3
+        self._ki_manual_normalize = ki_manual_normalize
 
         self.input_projection = nn.Linear(self._input_dim, hidden_dim)
         self.mlp = nn.Sequential(
@@ -92,4 +94,11 @@ class MLPPIDConfigure(nn.Module):
         if self._output_dim == 3:
             integral_limit = torch.full_like(pid_gains[..., :1], 1e-3)
             pid_gains = torch.cat([pid_gains, integral_limit], dim=-1)
+
+        if self._ki_manual_normalize:
+            pid_gains = torch.where(
+                torch.arange(self._output_dim, device=pid_gains.device) == 1,
+                pid_gains * torch.tensor([1e-4], device=pid_gains.device),
+                pid_gains,
+            )
         return pid_gains
