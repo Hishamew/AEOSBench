@@ -52,8 +52,11 @@ class AttitudeControlEnvironment(StateDictMixin):
         return hasattr(self, "_simulator")
 
     @property
-    def initial_ephemeris(self) -> Ephemeris:
-        return self._initial_ephemeris
+    def ephemeris(self) -> Ephemeris:
+        if not self.is_built:
+            return self._initial_ephemeris
+        else:
+            return self._simulator.get_earth_ephemeris(None)
 
     @property
     def simulator(self) -> Simulator:

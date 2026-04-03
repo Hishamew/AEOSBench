@@ -1,3 +1,5 @@
+import torch
+
 from constellation.data import Constellation
 
 from ..callbacks import BaseCallback
@@ -38,10 +40,22 @@ class ResetCallback(BaseCallback):
             self.runner.environment.constellation = constellation
 
         if self.should_sample_taskset:
-            ephemeris = self.runner.environment.initial_ephemeris
-            constellation = self.runner.environment.constellation
+            ephemeris = self.runner.environment.ephemeris
+            if self.runner.environment.is_built:
+                state_dict = self.runner.environment.simulator_state_dict
+                position_BP_N = state_dict['_spacecraft']['_hub'][
+                    'dynamic_params']['position_BP_N']
+            else:
+                constellation = self.runner.environment.constellation
+                rs = []
+                for sat in constellation.sort():
+                    r, _ = sat.rv
+                    r = torch.from_numpy(r)
+                    rs.append(r)
+                position_BP_N = torch.stack(rs)
+
             self.runner.environment.taskset = TaskSet.sample(
-                constellation,
+                position_BP_N,
                 ephemeris,
             )
 

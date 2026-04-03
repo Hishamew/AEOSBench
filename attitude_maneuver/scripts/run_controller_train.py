@@ -14,6 +14,8 @@ from todd.configs import PyConfig
 from todd.patches.py_ import DictAction
 from todd.utils import init_seed
 
+from .utils import compatible_load
+
 
 def log(
     runner: ControllerRunner,
@@ -71,7 +73,7 @@ if __name__ == '__main__':
     model = MLPPIDConfigure(**config.runner.model)
     if args.load:
         model_state_dict = torch.load(args.load)
-        model.load_state_dict(model_state_dict)
+        compatible_load(model, model_state_dict)
 
     # build optimizer
     optim_config = dict()

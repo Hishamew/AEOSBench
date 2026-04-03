@@ -6,10 +6,11 @@ model = dict(
     hidden_dim=256,
     with_integral_limit=True,
 )
-
+episode_num = 1000
+warmup_episode = 100
 optimizer = dict(
     type='torch.optim.Adam',
-    lr=1e-3,
+    lr=1e-4,
     betas=(0.7, 0.95),
 )
 lr_scheduler = dict(
@@ -17,17 +18,17 @@ lr_scheduler = dict(
     schedulers=[
         dict(
             type='LinearLR',
-            start_factor=0.1,
+            start_factor=1e-4,
             end_factor=1.0,
-            total_iters=10,
+            total_iters=warmup_episode - 1,
         ),
         dict(
             type='MultiStepLR',
-            milestones=[40, 80],
+            milestones=[100, 200],
             gamma=0.1,
         ),
     ],
-    milestones=[10],
+    milestones=[warmup_episode],
 )
 
 runner = dict(
@@ -64,7 +65,7 @@ runner = dict(
     environment=environment,
     optimizer=optimizer,
     episode_length=180,
-    total_episode=1000,
+    total_episode=episode_num,
     full_grad=False,
     progress_bar=False,
 )

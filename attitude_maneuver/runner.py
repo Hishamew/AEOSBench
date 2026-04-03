@@ -43,8 +43,6 @@ class ControllerRunner:
 
         self._memo['config'] = config
 
-        self.logger.info(f'Training Config:\n {pformat(config)}')
-
     @property
     def config(self) -> PyConfig:
         return self._memo['config']

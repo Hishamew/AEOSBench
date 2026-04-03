@@ -45,18 +45,10 @@ class LocationPointingTaskset(TaskSet):
     @classmethod
     def sample(
         cls,
-        constellation: Constellation,
-        initial_ephemeris: Ephemeris,
+        position_BP_N: torch.Tensor,
+        ephemeris: Ephemeris,
     ) -> Self:
-        rs = []
-        for sat in constellation.sort():
-            r, _ = sat.rv
-            r = torch.from_numpy(r)
-            rs.append(r)
-        position_BP_N = torch.stack(rs)
-
-        direction_cosine_matrix_PN = initial_ephemeris[
-            'direction_cosine_matrix_CN']
+        direction_cosine_matrix_PN = ephemeris['direction_cosine_matrix_CN']
         position_BP_P = torch.einsum(
             '...ij,...j->...i ',
             direction_cosine_matrix_PN.to(position_BP_N),
