@@ -18,6 +18,5 @@ class AttitudeLoss(LossCallback):
         )
         step_attitude_loss = step_attitude_loss / self.runner.environment.num_envs
 
-        attitude_loss = self.loss
-        attitude_loss += step_attitude_loss
+        attitude_loss = self.loss + step_attitude_loss
         self.loss = attitude_loss

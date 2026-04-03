@@ -25,5 +25,5 @@ class AttitudeErrorsMonitor(BaseMonitor):
     def _should_after_step(self) -> None:
         guidance_buffer = self.runner.environment.simulator.guidance_buffer
         attitude_BR = guidance_buffer.attitude_BR
-        attitude_errors = torch.norm(attitude_BR, dim=-1)
+        attitude_errors = 4 * torch.atan(torch.norm(attitude_BR, dim=-1))
         self.recorder.append(attitude_errors.cpu())

@@ -1,5 +1,5 @@
 environment = dict(
-    num_envs=128,
+    num_envs=512,
 )
 
 model = dict(
@@ -10,13 +10,30 @@ episode_num = 1000
 warmup_episode = 100
 optimizer = dict(
     type='torch.optim.Adam',
-    lr=5e-4,
+    lr=1e-4,
     betas=(0.7, 0.95),
 )
-lr_scheduler = dict(
+cos_scheduler = dict(
     type='CosineAnnealingLR',
     T_max=episode_num,
     eta_min=5e-5,
+)
+step_scheduler = dict(
+    type='SquentialLR',
+    schedulers=[
+        dict(
+            type='LinearLR',
+            start_factor=0.0001,
+            end_factor=1.0,
+            total_iters=warmup_episode - 1
+        ),
+        dict(
+            type='MultiStepLR',
+            milestones=[300, 600],
+            gamma=0.1,
+        )
+    ],
+    milestones=[warmup_episode],
 )
 
 runner = dict(
@@ -34,12 +51,13 @@ runner = dict(
             losses=dict(
                 attitude_loss=dict(type='AttitudeLoss', weight=1.0),
                 battery_loss=dict(type='BatteryLoss', weight=0.01),
+                motion_loss=dict(type='MotionLoss', weight=1.0, threshold=0.1)
             )
         ),
         dict(type='OptimizeCallback'),
         dict(
             type='LRSchedulerCallback',
-            lr_scheduler_config=lr_scheduler,
+            lr_scheduler_config=step_scheduler,
         ),
         dict(
             type='LoggerRegistry.CheckpointLogger',

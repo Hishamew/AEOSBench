@@ -57,6 +57,9 @@ class LossCollector(LossCallback, BuildPreHookMixin):
             loss.after_step()
 
     def after_episode(self) -> None:
+        for loss in self._losses:
+            loss.after_episode()
+
         total_loss = 0
         for loss_callback, weight in zip(self._losses, self._weights):
             total_loss += weight * loss_callback.loss / self.runner.episode_length
