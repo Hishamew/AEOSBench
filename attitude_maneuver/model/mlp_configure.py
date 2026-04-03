@@ -19,12 +19,13 @@ class MLPPIDConfigure(nn.Module):
         super().__init__()
         self._input_dim = INPUT_DIM
         self._hidden_dim = hidden_dim
+        self._output_dim = 4 if with_integral_limit else 3
 
         self.input_projection = nn.Linear(self._input_dim, hidden_dim)
         self.mlp = nn.Sequential(
             nn.Linear(hidden_dim, 4 * hidden_dim),
             nn.GELU(),
-            nn.Linear(4 * hidden_dim, 3),
+            nn.Linear(4 * hidden_dim, self._output_dim),
         )
 
         self._input_normalizer = InputNormalizer(self._input_dim)
@@ -46,7 +47,11 @@ class MLPPIDConfigure(nn.Module):
 
         # Initialize the last layer bias to some reasonable values
         last_layer = self.mlp[-1]
-        self.init_bias(last_layer, target_values=[10.0, 1e-3, 10.0])
+        self.init_bias(
+            last_layer,
+            target_values=[10.0, 1e-3, 10.0, 1e-3]
+            if with_integral_limit else [10.0, 1e-3, 10.0]
+        )
 
     @property
     def need_update(self) -> bool:
@@ -84,4 +89,7 @@ class MLPPIDConfigure(nn.Module):
         raw_gains = self.mlp(x)
 
         pid_gains: torch.Tensor = torch.exp(raw_gains)
+        if self._output_dim == 3:
+            integral_limit = torch.full_like(pid_gains[..., :1], 1e-3)
+            pid_gains = torch.cat([pid_gains, integral_limit], dim=-1)
         return pid_gains

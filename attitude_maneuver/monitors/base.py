@@ -67,7 +67,7 @@ class BaseMonitor(BaseCallback, ABC):
     def after_episode(self) -> None:
         if self.should_record:
             data = torch.stack(self.recorder, dim=1)
-            self.recoder = random.sample(data.tolist(), self.num)
+            self.recorder = random.sample(data.tolist(), self.num)
             self.plot()
 
     def after_step(self):

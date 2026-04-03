@@ -23,6 +23,11 @@ class LossCollector(LossCallback, BuildPreHookMixin):
         self._losses = losses
         self._weights = weights
 
+    def bind(self, *args, **kwargs) -> None:
+        super().bind(*args, **kwargs)
+        for loss in self._losses:
+            loss.bind(*args, **kwargs)
+
     @classmethod
     def build_pre_hook(
         cls,
@@ -34,7 +39,7 @@ class LossCollector(LossCallback, BuildPreHookMixin):
         weights = []
         for name, loss_config in config.losses.items():
             loss_config.update(name=name)
-            weight= loss_config.pop('weight')
+            weight = loss_config.pop('weight')
             weights.append(weight)
             loss = registry.build_or_return(loss_config)
             losses.append(loss)
@@ -54,7 +59,7 @@ class LossCollector(LossCallback, BuildPreHookMixin):
     def after_episode(self) -> None:
         total_loss = 0
         for loss_callback, weight in zip(self._losses, self._weights):
-            total_loss += weight * loss_callback.loss/self.runner.episode_length
+            total_loss += weight * loss_callback.loss / self.runner.episode_length
         self.loss = total_loss
 
         if 'log' in self.runner.memo:
@@ -62,13 +67,15 @@ class LossCollector(LossCallback, BuildPreHookMixin):
                 l.loss for l in self._losses
             ])
             self.runner.memo['log']['loss'] = '\n'.join([
-                f'{l.name.replace('_', ' ').title()}: {l.loss.item():.6e}' for l in self._losses])
+                f"{l.name.replace('_', ' ').title()}: {l.loss.item():.6e}"
+                for l in self._losses
+            ])
 
         if 'tensorboard' in self.runner.memo:
             writer: SummaryWriter = self.runner.memo['tensorboard']
             for loss_callback in self._losses:
                 writer.add_scalar(
-                    f'Train/{loss_callback.name.replace('_', ' ').title()}',
+                    f"Train/{loss_callback.name.replace('_', ' ').title()}",
                     loss_callback.loss.item(),
                     self.runner.episode,
                 )

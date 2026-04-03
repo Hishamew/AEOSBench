@@ -48,7 +48,7 @@ class AttitudeControlEnvironment(StateDictMixin):
         return self._num_envs
 
     @property
-    def is_initialized(self) -> bool:
+    def is_built(self) -> bool:
         return hasattr(self, "_simulator")
 
     @property
@@ -57,26 +57,22 @@ class AttitudeControlEnvironment(StateDictMixin):
 
     @property
     def simulator(self) -> Simulator:
-        if not self.is_initialized:
+        if not self.is_built:
             raise AttributeError("Constellation not initialized yet.")
         return self._simulator
 
     @property
     def simulator_state_dict(self) -> SimulatorStateDict:
-        if not self.is_initialized:
+        if not self.is_built:
             raise AttributeError("Constellation not initialized yet.")
         return self._simulator_state_dict
 
     @property
     def constellation(self) -> Constellation:
-        if not self.is_initialized:
-            raise AttributeError("Constellation not initialized yet.")
         return self._constellation
 
     @property
     def taskset(self) -> TaskSet:
-        if not self.is_initialized:
-            raise AttributeError("Constellation not initialized yet.")
         return self._taskset
 
     @constellation.setter
@@ -118,7 +114,7 @@ class AttitudeControlEnvironment(StateDictMixin):
         )
 
     def step(self) -> None:
-        self._simulator_state_dict = self._simulator(
+        self._simulator_state_dict, _ = self._simulator(
             self._simulator_state_dict
         )
         self._timer.step()
@@ -130,7 +126,7 @@ class AttitudeControlEnvironment(StateDictMixin):
         )
 
     def state_dict(self) -> dict[str, Any]:
-        if not self.is_initialized:
+        if not self.is_built:
             raise AttributeError("Constellation not initialized yet.")
 
         return dict(

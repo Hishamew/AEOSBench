@@ -70,7 +70,6 @@ class LocationPointingTaskset(TaskSet):
         latitude_sat, longitude_sat, _ = lla_spacecraft.unbind(-1)
 
         return cls([
-            LocationPointingTask.sample(i, lat.item(), lon.item())
-            for i, (lat, lon) in
+            LocationPointingTask.sample(i, lat, lon) for i, (lat, lon) in
             enumerate(zip(latitude_sat.tolist(), longitude_sat.tolist()))
         ])

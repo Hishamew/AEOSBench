@@ -58,6 +58,8 @@ class AttitudeControlConstellation(SatsimConstellation):
 
             return tuple([state_dict]), kwargs
 
-        self.register_forward_pre_hook(detach_forward_hook, with_kwargs=True)
+        self._mrp_control.register_forward_pre_hook(
+            detach_forward_hook, with_kwargs=True
+        )
 
         return state_dict

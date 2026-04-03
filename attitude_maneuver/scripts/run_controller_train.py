@@ -20,9 +20,11 @@ def log(
     args: argparse.Namespace,
     config: PyConfig,
 ) -> None:
+
     runner.logger.info("Command\n" + ' '.join(sys.argv))
     runner.logger.info(f"Args\n{vars(args)}")
     runner.logger.info(f"Config\n{config.dumps()}")
+    config.runner.work_dir = str(config.runner.work_dir)
 
     if 'config' in args:
         config_name = cast(pathlib.Path, args.config).name
@@ -60,6 +62,7 @@ if __name__ == '__main__':
 
     device = 0
     torch.cuda.set_device(device)
+    torch.set_default_device(device)
 
     config = PyConfig.load(args.config)
     config.override(args.override)

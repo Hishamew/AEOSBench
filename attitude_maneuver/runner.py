@@ -11,6 +11,7 @@ import todd
 import torch
 from todd.configs import PyConfig
 from todd.runners import Memo
+from tqdm import trange
 
 from .environment.environment import AttitudeControlEnvironment
 from .model import MLPPIDConfigure
@@ -32,13 +33,14 @@ class ControllerRunner:
         self._model = model
         self._optim = optimizer
         self._env = env
+        self._memo: Memo = defaultdict(dict)
+
         self._memo['work_dir'] = pathlib.Path(config.work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
         callbacks.bind(self)
         self._callbacks = callbacks
 
-        self._memo: Memo = defaultdict(dict)
         self._memo['config'] = config
 
         self.logger.info(f'Training Config:\n {pformat(config)}')
@@ -105,7 +107,9 @@ class ControllerRunner:
         self._callbacks.before_episode()
         self.load_actuator()
 
-        for step in range(self.episode_length):
+        for step in trange(
+            self.episode_length, disable=not self.config.progress_bar
+        ):
             self._callbacks.before_step()
             self.environment.step()
             self._callbacks.after_step()
@@ -122,10 +126,11 @@ class ControllerRunner:
         sc_inertia = hub.moment_of_inertia_matrix_wrt_body_point
         sc_inertia = torch.diagonal(sc_inertia, dim1=-2, dim2=-1)
 
+        params_dtype = torch.get_default_dtype()
         pid_params: torch.Tensor = self.model(
-            sc_inertia=sc_inertia,
-            rw_inertia=rw_inertia,
-            sc_mass=sc_mass,
+            sc_inertia=sc_inertia.to(params_dtype),
+            rw_inertia=rw_inertia.to(params_dtype),
+            sc_mass=sc_mass.to(params_dtype),
         )
         k, ki, p, integral_limit = pid_params.unbind(-1)
         self.environment.simulator.configure_pid(

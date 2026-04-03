@@ -1,3 +1,6 @@
+__all__ = [
+    'BatteryMonitor',
+]
 import torch
 
 from ..registries import MonitorRegistry

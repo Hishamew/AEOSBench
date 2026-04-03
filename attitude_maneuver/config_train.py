@@ -4,6 +4,7 @@ environment = dict(
 
 model = dict(
     hidden_dim=256,
+    with_integral_limit=True,
 )
 
 optimizer = dict(
@@ -33,7 +34,12 @@ runner = dict(
     model=model,
     callbacks=[
         dict(type='LoggerRegistry.GitLogger'),
-        dict(type='LoggerRegistry.TensorboardCallback'),
+        dict(type='LoggerRegistry.TensorboardLogger'),
+        dict(
+            type='ResetCallback',
+            sample_task_interval=1,
+            sample_constellation_interval=5,
+        ),
         dict(
             type='LossRegistry.LossCollector',
             losses=dict(
@@ -47,9 +53,10 @@ runner = dict(
             lr_scheduler_config=lr_scheduler,
         ),
         dict(
-            type='LoggerRegistry.CheckpointCallback',
+            type='LoggerRegistry.CheckpointLogger',
             interval=20,
         ),
+        dict(type='LoggerRegistry.LogCallback', file_logging=True),
         dict(type='MonitorRegistry.BatteryMonitor'),
         dict(type='MonitorRegistry.AttitudeErrorsMonitor'),
         dict(type='MonitorRegistry.TorqueMonitor'),
@@ -57,6 +64,7 @@ runner = dict(
     environment=environment,
     optimizer=optimizer,
     episode_length=180,
-    total_episode=100,
+    total_episode=1000,
     full_grad=False,
+    progress_bar=False,
 )

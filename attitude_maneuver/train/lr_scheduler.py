@@ -6,8 +6,10 @@ from todd.bases.configs import Config
 from todd.registries.patches import LRSchedulerRegistry
 
 from ..callbacks import BaseCallback
+from ..registries import CallbackRegistry
 
 
+@CallbackRegistry.register_()
 class LRSchedulerCallback(BaseCallback):
 
     def __init__(

@@ -1,3 +1,6 @@
+__all__ = [
+    'AttitudeErrorsMonitor',
+]
 import torch
 
 from ..registries import MonitorRegistry
@@ -23,4 +26,4 @@ class AttitudeErrorsMonitor(BaseMonitor):
         guidance_buffer = self.runner.environment.simulator.guidance_buffer
         attitude_BR = guidance_buffer.attitude_BR
         attitude_errors = torch.norm(attitude_BR, dim=-1)
-        self.recoder.append(attitude_errors.cpu())
+        self.recorder.append(attitude_errors.cpu())
