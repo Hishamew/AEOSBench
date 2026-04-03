@@ -30,13 +30,14 @@ class LogCallback(BaseLogger):
         self.runner.memo['log'] = dict()
 
     def after_episode(self) -> None:
-        log:dict[str, Any] = self.runner.memo.pop('log', None)
+        log: dict[str, Any] = self.runner.memo.pop('log', None)
 
         prefix = f"Episode [{self.runner.episode}/{self.runner.total_episode}]\n"
 
         message = '\n'.join(
-            f'[Source={k.replace('_', ' ').title(
-            )}]\n{v}' for k, v in log.items() if v is not None
+            f"[Source={k.replace('_', ' ').title()}]\n{v}"
+            for k, v in log.items()
+            if v is not None
         )
 
         self.logger.info(prefix + message)

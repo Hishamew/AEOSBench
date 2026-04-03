@@ -52,6 +52,10 @@ class AttitudeControlEnvironment(StateDictMixin):
         return hasattr(self, "_simulator")
 
     @property
+    def initial_ephemeris(self) -> Ephemeris:
+        return self._initial_ephemeris
+
+    @property
     def simulator(self) -> Simulator:
         if not self.is_initialized:
             raise AttributeError("Constellation not initialized yet.")
@@ -63,18 +67,27 @@ class AttitudeControlEnvironment(StateDictMixin):
             raise AttributeError("Constellation not initialized yet.")
         return self._simulator_state_dict
 
-    def _stochastic_init(self) -> None:
-        partial_sampled_constellation = Constellation.sample_mrp(self.num_envs)
-        self._constellation = Constellation.sample(
-            list(partial_sampled_constellation.values()),
-            self.num_envs,
-        )
-        self._taskset = TaskSet.sample(
-            self._constellation,
-            self._initial_ephemeris,
-        )
+    @property
+    def constellation(self) -> Constellation:
+        if not self.is_initialized:
+            raise AttributeError("Constellation not initialized yet.")
+        return self._constellation
 
-    def _build_simulator(self) -> None:
+    @property
+    def taskset(self) -> TaskSet:
+        if not self.is_initialized:
+            raise AttributeError("Constellation not initialized yet.")
+        return self._taskset
+
+    @constellation.setter
+    def constellation(self, constellation: Constellation) -> None:
+        self._constellation = constellation
+
+    @taskset.setter
+    def taskset(self, taskset: TaskSet) -> None:
+        self._taskset = taskset
+
+    def build_simulator(self) -> None:
         self._timer = Timer(1.)
         self._simulator = Simulator(
             self._timer,
@@ -83,12 +96,16 @@ class AttitudeControlEnvironment(StateDictMixin):
             self._taskset,
         )
         self._simulator_state_dict = self._simulator.reset()
+        self._timer.reset()
+
         self._simulator.to(self._backend, self._fp_precision)
         self._simulator_state_dict = dict_recursive_apply(
             self._simulator_state_dict,
             lambda x: x.to(self._backend, self._fp_precision),
         )
+        self.setup_tracking_target()
 
+    def setup_tracking_target(self) -> None:
         lla = self._simulator.tracking_target.new_tensor([
             task.coordinate for task in self._taskset
         ])
@@ -99,10 +116,6 @@ class AttitudeControlEnvironment(StateDictMixin):
             lla,
             with_target,
         )
-
-    def reset(self) -> None:
-        self._stochastic_init()
-        self._build_simulator()
 
     def step(self) -> None:
         self._simulator_state_dict = self._simulator(
@@ -137,7 +150,7 @@ class AttitudeControlEnvironment(StateDictMixin):
         if 'taskset' in state_dict:
             self._taskset = TaskSet.from_dicts(state_dict['taskset'])
 
-        self._build_simulator()
+        self.build_simulator()
 
         if 'simulator_state_dict' in state_dict:
             self._simulator_state_dict = state_dict['simulator_state_dict']

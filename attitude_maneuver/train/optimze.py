@@ -1,3 +1,6 @@
+__all__ = [
+    'OptimizeCallback',
+]
 import torch
 
 from ..callbacks import BaseCallback

@@ -1,3 +1,6 @@
+__all__ = [
+    'LRSchedulerCallback',
+]
 import torch
 from todd.bases.configs import Config
 from todd.registries.patches import LRSchedulerRegistry

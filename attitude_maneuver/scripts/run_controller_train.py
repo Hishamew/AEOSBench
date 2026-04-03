@@ -58,15 +58,11 @@ if __name__ == '__main__':
     args = parse_args()
     init_seed(args.seed)
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    torch.set_default_device(device)
+    device = 0
     torch.cuda.set_device(device)
 
     config = PyConfig.load(args.config)
     config.override(args.override)
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    torch.set_default_device(device)
 
     # build model
     model = MLPPIDConfigure(**config.runner.model)
@@ -102,5 +98,5 @@ if __name__ == '__main__':
     if args.debug:
         torch.set_anomaly_enabled(True)
 
-    trainer.train()
+    trainer.run()
     # torch.set_anomaly_enabled(False)

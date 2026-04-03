@@ -103,6 +103,7 @@ class ControllerRunner:
     def run_episode(self) -> None:
 
         self._callbacks.before_episode()
+        self.load_actuator()
 
         for step in range(self.episode_length):
             self._callbacks.before_step()
@@ -136,15 +137,12 @@ class ControllerRunner:
             self.full_grad,
         )
 
-    def train(self) -> None:
+    def run(self) -> None:
 
         self._callbacks.before_run()
 
         for episode in range(self.total_episode):
             self.episode = episode
-            self.environment.reset()
-            self.load_actuator()
-
             self.run_episode()
 
         self.tag = 'after_run'
