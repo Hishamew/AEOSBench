@@ -48,6 +48,12 @@ def parse_args():
         help="Use a specified initial model state dict",
     )
     parser.add_argument(
+        '--load-option',
+        action=DictAction,
+        default=dict(),
+        help="Additional options for loading the model state dict, "
+    )
+    parser.add_argument(
         '--work-dir',
         type=pathlib.Path,
         default=pathlib.Path('./work_dir/test'),
@@ -73,7 +79,11 @@ if __name__ == '__main__':
     model = MLPPIDConfigure(**config.runner.model)
     if args.load:
         model_state_dict = torch.load(args.load)
-        compatible_load(model, model_state_dict)
+        compatible_load(
+            model,
+            model_state_dict,
+            **args.load_option,
+        )
 
     # build optimizer
     optim_config = dict()

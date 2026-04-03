@@ -5,7 +5,11 @@ import torch
 from torch import nn
 
 
-def compatible_load(model: nn.Module, state_dict: dict) -> None:
+def compatible_load(
+    model: nn.Module,
+    state_dict: dict,
+    ki_manual_normalize: bool = False,
+) -> None:
     """
     Load the state dict into the model, make compatible for both
     with_integral_limit and without_integral_limit versions of the model.
@@ -22,6 +26,10 @@ def compatible_load(model: nn.Module, state_dict: dict) -> None:
         # The output dim matches, we can load directly
         model.load_state_dict(state_dict)
         return
+
+    if ki_manual_normalize:
+        state_dict['mlp.2.weight'][1, :] *= 1e-4
+        state_dict['mlp.2.bias'][1] *= 1e-4
 
     if output_dim == 4 and state_dict_output_dim == 3:
         state_dict['mlp.2.weight'] = torch.cat(
