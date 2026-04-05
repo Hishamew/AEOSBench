@@ -7,7 +7,9 @@ from copy import deepcopy
 import todd
 import torch
 import torch.nn as nn
+from attitude_maneuver.model import MLPPIDConfigure
 from satsim.architecture import constants
+from todd.configs import PyConfig
 
 from constellation import (
     SATELLITES_ROOT,
@@ -34,85 +36,6 @@ TASKSET_PATH = TASKSETS_ROOT / 'mrp.json'
 TASKSET = TaskSet.load(str(TASKSET_PATH))
 
 
-class InputNormalizer(nn.Module):
-
-    def __init__(
-        self,
-        shape: int | list[int],
-        epsilon: float = 1e-5,
-    ) -> None:
-        super().__init__()
-        shape = [shape] if isinstance(shape, int) else shape
-        self.register_buffer('_running_mean', torch.zeros(*shape))
-        self.register_buffer('_running_var', torch.ones(*shape))
-        self.register_buffer('_count', torch.tensor(epsilon))
-        self._epsilon = epsilon
-
-    @property
-    def running_mean(self) -> torch.Tensor:
-        return self.get_buffer('_running_mean')
-
-    @property
-    def running_var(self) -> torch.Tensor:
-        return self.get_buffer('_running_var')
-
-    @property
-    def count(self) -> torch.Tensor:
-        return self.get_buffer('_count')
-
-    def forward(self, batched_input: torch.Tensor):
-
-        result = (batched_input - self.running_mean
-                  ) / torch.sqrt(self.running_var + self._epsilon)
-
-        return result
-
-
-class MLPPIDConfigure(nn.Module):
-
-    def __init__(
-        self,
-        hidden_dim: int,
-        task_invariant: bool = True,
-    ) -> None:
-        super().__init__()
-        self._input_dim = 7 if task_invariant else 12
-        self._hidden_dim = hidden_dim
-        self._task_invariant = task_invariant
-
-        self.input_projection = nn.Linear(self._input_dim, hidden_dim)
-        self.mlp = nn.Sequential(
-            nn.Linear(hidden_dim, 4 * hidden_dim),
-            nn.GELU(),
-            nn.Linear(4 * hidden_dim, 3),
-        )
-
-        self._input_normalizer = InputNormalizer(self._input_dim)
-        self._runtime_normalizer = deepcopy(self._input_normalizer)
-
-    def forward(
-        self,
-        sc_mass: torch.Tensor,
-        sc_inertia: torch.Tensor,
-        rw_inertia: torch.Tensor,
-    ) -> torch.Tensor:
-        feature = torch.cat(
-            [
-                rw_inertia,
-                sc_mass.unsqueeze(-1),
-                sc_inertia,
-            ],
-            dim=-1,
-        )
-        feature = self._runtime_normalizer(feature)
-
-        x = self.input_projection(feature)
-        raw_gains = self.mlp(x)
-
-        pid_gains: torch.Tensor = torch.exp(raw_gains)
-        return pid_gains
-
-
 def reconfigure_pid(
     constellation: Constellation,
     configurer: MLPPIDConfigure,
@@ -135,8 +58,7 @@ def reconfigure_pid(
     sc_inertia = torch.stack(sc_inertias)
     rw_inertia = torch.stack(rw_inertias)
     pid_gains: torch.Tensor = configurer(sc_masses, sc_inertia, rw_inertia)
-    k, ki, p = pid_gains.unbind(dim=-1)
-    ki = ki * 1e-4
+    k, ki, p, integral_limit = pid_gains.unbind(dim=-1)
     satellites = [
         Satellite(
             sat.id_,
@@ -153,7 +75,7 @@ def reconfigure_pid(
                 k=k[i].item(),
                 ki=ki[i].item(),
                 p=p[i].item(),
-                integral_limit=random.uniform(0.05, 0.2),
+                integral_limit=integral_limit[i].item(),
             ),
             sat.true_anomaly,
             sat.mrp_attitude_bn,
@@ -188,17 +110,36 @@ def generate_satellites(
         constellation = Constellation.sample_mrp()
         constellation = reconfigure_pid(constellation, configurer)
         environment = SatsimEnvironment(
-            constellation=constellation,
-            all_tasks=TASKSET,
+            constellation=constellation, all_tasks=TASKSET, backend='cpu'
         )
         task_manager = TaskManager(timer=environment.timer, taskset=TASKSET)
         callbacks = ComposedCallback(
             callbacks=[
                 CompletionRateEvaluator(),
+                # StateCollector(
+                #     work_dir=pathlib.Path('log'),
+                #     namespace=dict(
+                #         attitude_error='_location_pointing.attitude_BR_old',
+                #         integral_sigma='_mrp_control.integral_sigma',
+                #     ),
+                #     default=dict(
+                #         attitude_error=torch.zeros(
+                #             1, 3, device=environment._backend
+                #         ),
+                #     )
+                # ),
+                # MemoCollector(
+                #     work_dir=pathlib.Path('log'),
+                #     namespace=dict(
+                #         assignment=torch.tensor,
+                #         is_visible=torch.stack,
+                #         max_progress=torch.stack,
+                #     )
+                # )
             ],
         )
         controller = Controller(
-            pathlib.Path(__file__).stem,
+            f'{i:05}',
             environment=environment,
             task_manager=task_manager,
             callbacks=callbacks,
@@ -208,6 +149,7 @@ def generate_satellites(
         algorithm.prepare(environment, task_manager)
 
         # try:
+
         controller.run(algorithm, progress_bar=False, max_time_step=7200)
         # except Exception as e:
         #     todd.logger.error("rank %d failed %d: %s", RANK, i, e)
@@ -217,23 +159,32 @@ def generate_satellites(
         todd.logger.info("rank %d finished %d with %s", RANK, i, completion_rate)  # noqa: E501 yapf: disable
         if completion_rate > completion_rate_threshold:
             constellation.dump(str(satellites_root / f'{i}.json'))
+        else:
+            constellation.dump(f'log/failed_{i}.json')
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--threshold', type=float, default=0.99)
+    parser.add_argument('--config', type=pathlib.Path, default=None)
     parser.add_argument('--ckpt', type=str)
+    parser.add_argument('--progress-bar', action='store_true')
+
     args = parser.parse_args()
     return args
 
 
 def main() -> None:
     args = parse_args()
-    configurer = MLPPIDConfigure(hidden_dim=256, task_invariant=True)
-    device = torch.device(RANK % torch.cuda.device_count())
-    torch.cuda.set_device(device)
+
+    model_config = PyConfig.load(args.config)
+    model_config = model_config.runner.model
+
+    configurer = MLPPIDConfigure(**model_config)
+    # device = torch.device(RANK % torch.cuda.device_count())
+    # torch.cuda.set_device(device)
     configurer.load_state_dict(
-        torch.load(args.ckpt, map_location=device),
+        torch.load(args.ckpt, map_location='cpu'),
     )
 
     generate_satellites(

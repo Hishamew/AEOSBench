@@ -49,8 +49,7 @@ def generate_trajectory(
     constellation = Constellation.load(str(constellation_path))
 
     environment = SatsimEnvironment(
-        constellation=constellation,
-        all_tasks=taskset,
+        constellation=constellation, all_tasks=taskset, backend='cpu'
     )
     task_manager = TaskManager(timer=environment.timer, taskset=taskset)
     callbacks = ComposedCallback(
@@ -111,8 +110,8 @@ def main() -> None:
     args = parse_args()
     generate_trajectories('train', 25_000, args.previous_trajectories)
     generate_trajectories('val_seen', 500, args.previous_trajectories)
-    generate_trajectories('val_unseen', 500, args.previous_trajectories)
-    generate_trajectories('test', 1_000, args.previous_trajectories)
+    # generate_trajectories('val_unseen', 500, args.previous_trajectories)
+    # generate_trajectories('test', 1_000, args.previous_trajectories)
 
 
 if __name__ == '__main__':

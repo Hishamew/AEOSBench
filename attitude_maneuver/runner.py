@@ -4,7 +4,6 @@ __all__ = [
 import logging
 import pathlib
 from collections import defaultdict
-from pprint import pformat
 from typing import TYPE_CHECKING
 
 import todd
