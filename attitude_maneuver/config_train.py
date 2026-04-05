@@ -4,7 +4,7 @@ environment = dict(
 
 model = dict(
     hidden_dim=256,
-    with_integral_limit=True,
+    with_integral_limit=False,
 )
 episode_num = 1000
 warmup_episode = 100
@@ -19,7 +19,7 @@ cos_scheduler = dict(
     eta_min=5e-5,
 )
 step_scheduler = dict(
-    type='SquentialLR',
+    type='SequentialLR',
     schedulers=[
         dict(
             type='LinearLR',
@@ -61,7 +61,7 @@ runner = dict(
         ),
         dict(
             type='LoggerRegistry.CheckpointLogger',
-            interval=20,
+            interval=50,
         ),
         dict(type='LoggerRegistry.LogCallback', file_logging=True),
         dict(type='MonitorRegistry.BatteryMonitor'),

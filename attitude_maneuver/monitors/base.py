@@ -67,8 +67,8 @@ class BaseMonitor(BaseCallback, ABC):
     def after_episode(self) -> None:
         if self.should_record:
             data = torch.stack(self.recorder, dim=1)
-            self.recorder = random.sample(data.tolist(), self.num)
-            self.plot()
+            data = random.sample(data.tolist(), self.num)
+            self.plot(data)
 
     def after_step(self):
         if not self.should_record:
@@ -80,11 +80,11 @@ class BaseMonitor(BaseCallback, ABC):
     def _should_after_step(self) -> None:
         pass
 
-    def plot(self) -> None:
+    def plot(self, data: list[Any]) -> None:
         plt.figure(figsize=(15, 15))
         for i in range(self.num):
             plt.subplot(3, 3, i + 1)
-            plt.plot(self.recorder[i])
+            plt.plot(data[i])
 
             plt.xlabel('Timestep')
             plt.ylabel(f'{self.name} ({self.unit})')

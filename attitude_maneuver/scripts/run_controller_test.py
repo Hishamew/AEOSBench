@@ -85,13 +85,6 @@ if __name__ == '__main__':
             **args.load_option,
         )
 
-    # build optimizer
-    optim_config = dict()
-    optim_config.update(config.runner.optimizer)
-
-    optim_fn = eval(optim_config.pop('type'))
-    optimizer = optim_fn(model.parameters(), **optim_config)
-
     env = AttitudeControlEnvironment(**config.runner.environment)
 
     callbacks = CallbackRegistry.build(
@@ -101,17 +94,16 @@ if __name__ == '__main__':
     )
     config.runner.work_dir = cast(pathlib.Path, args.work_dir)
 
-    trainer = ControllerRunner(
+    runner = ControllerRunner(
         model,
         callbacks,
         config.runner,
         env,
-        optimizer,
     )
-    log(trainer, args, config)
+    log(runner, args, config)
 
     if args.debug:
         torch.set_anomaly_enabled(True)
 
-    trainer.run()
+    runner.run()
     # torch.set_anomaly_enabled(False)

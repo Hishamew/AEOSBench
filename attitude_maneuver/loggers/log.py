@@ -32,7 +32,7 @@ class LogCallback(BaseLogger):
     def after_episode(self) -> None:
         log: dict[str, Any] = self.runner.memo.pop('log', None)
 
-        prefix = f"Episode [{self.runner.episode}/{self.runner.total_episode}]\n"
+        prefix = f"Episode [{self.runner.episode+1}/{self.runner.total_episode}]\n"
 
         message = '\n'.join(
             f"[Source={k.replace('_', ' ').title()}]\n{v}"

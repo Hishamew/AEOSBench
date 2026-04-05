@@ -21,10 +21,6 @@ class AttitudeControlConstellationStateDict(SatsimConstellationStateDict):
 
 class AttitudeControlConstellation(SatsimConstellation):
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._mrp_control = LearnableMRPControl(timer=self._timer)
-
     def configure_pid(
         self,
         state_dict: SatsimConstellationStateDict,
@@ -34,6 +30,8 @@ class AttitudeControlConstellation(SatsimConstellation):
         integral_limit: torch.Tensor,
         full_grad: bool = False,
     ) -> SatsimConstellationStateDict:
+        self._mrp_control = LearnableMRPControl(timer=self._timer)
+
         reference = state_dict['_mrp_control']['integral_sigma']
         mrp_control_state_dict = LearnableMRPControlStateDict(
             integral_sigma=reference.new_zeros((k.size(0), 3)),
