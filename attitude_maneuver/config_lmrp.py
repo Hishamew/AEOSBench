@@ -41,12 +41,13 @@ runner = dict(
     callbacks=[
         dict(type='LoggerRegistry.GitLogger'),
         dict(type='LoggerRegistry.TensorboardLogger'),
-        dict(type='ConstellationLoader'),
         dict(
             type='LMRPResetCallback',
             reset_interval=3,
         ),
         dict(type='LMRPLoadActuator'),
+        dict(type='EquatorTestValidator'),
+        dict(type='LMRPEarlyStopCallback'),
         dict(
             type='LossRegistry.LossCollector',
             losses=dict(
@@ -59,11 +60,6 @@ runner = dict(
         dict(
             type='LRSchedulerCallback',
             lr_scheduler_config=step_scheduler,
-        ),
-        dict(type='UpdateNormalizerCallback'),
-        dict(
-            type='LoggerRegistry.CheckpointLogger',
-            interval=50,
         ),
         dict(type='LoggerRegistry.LogCallback', file_logging=True),
         dict(type='MonitorRegistry.BatteryMonitor'),

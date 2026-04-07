@@ -55,21 +55,3 @@ class LMRPResetCallback(BaseCallback):
             self.runner.environment.clear_grad()
 
         self.runner.environment.setup_tracking_target()
-
-
-# TODO: This is for lmrp test
-@CallbackRegistry.register_()
-class ConstellationLoader(BaseCallback):
-
-    def before_run(self) -> None:
-        annotations: list[int] = json_load(
-            str(BENCHMARK_ANNOTATIONS_ROOT / f'val_seen.json'),
-        )['ids']
-        id_ = annotations[0]
-        constellation_path = (
-            BENCHMARK_CONSTELLATIONS_ROOT / 'val_seen' / f'{id_ // 1000:02}'
-            / f'{id_:05}.json'
-        )
-        constellation = Constellation.load(str(constellation_path))
-
-        self.runner.environment.constellation = constellation

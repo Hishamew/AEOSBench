@@ -118,6 +118,8 @@ class ControllerRunner:
         self._callbacks.before_run()
 
         for episode in range(self.total_episode):
+            if self._callbacks.should_stop():
+                break
             self.episode = episode
             self.run_episode()
 

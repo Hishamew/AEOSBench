@@ -1,3 +1,6 @@
+__all__ = [
+    'EquatorTestValidator',
+]
 import os
 from multiprocessing import Pool, cpu_count
 
@@ -41,7 +44,6 @@ def recover_to_equator_task(
         integral_limits,
     ):
         sat_mrp = Constellation.sample_mrp()[0]
-        mrp_control = sat.mrp_control
         mrp_control = MRPControl(
             k,
             ki,
@@ -123,7 +125,8 @@ class EquatorTestValidator(BaseCallback):
             return
 
         constellation = self.runner.environment.constellation
-        params = self.runner.model()
+        with torch.no_grad():
+            params = self.runner.model()
         ks, kis, ps, integral_limits = map(
             lambda x: x.cpu().tolist(), params.unbind(-1)
         )
