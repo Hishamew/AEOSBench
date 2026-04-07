@@ -46,6 +46,7 @@ runner = dict(
             sample_task_interval=1,
             sample_constellation_interval=5,
         ),
+        dict(type='MLPConfigureLoadActuator'),
         dict(
             type='LossRegistry.LossCollector',
             losses=dict(
@@ -59,6 +60,7 @@ runner = dict(
             type='LRSchedulerCallback',
             lr_scheduler_config=step_scheduler,
         ),
+        dict(type='UpdateNormalizerCallback'),
         dict(
             type='LoggerRegistry.CheckpointLogger',
             interval=50,

@@ -1,10 +1,12 @@
-__all__ = ['MLPPIDConfigure']
+__all__ = [
+    'MLPPIDConfigure',
+]
 from copy import deepcopy
 
 import torch
 from torch import nn
 
-from .normalize import InputNormalizer
+from ..normalize import InputNormalizer
 
 INPUT_DIM = 7
 
