@@ -83,8 +83,10 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
         constellation: Constellation,
         standard_time_init: str,
         taskset: TaskSet,
+        skip_kernel_furn: bool = False,
     ) -> None:
         super().__init__(timer=timer)
+        self._skip_kernel_furn = skip_kernel_furn
 
         self._n = len(constellation)
         sorted_satellites = constellation.sort()
@@ -158,10 +160,17 @@ class SatsimConstellation(Module[SatsimConstellationStateDict]):
             is_central=True,
         )
 
-        spice_interface = SpiceInterface(
-            timer=self._timer,
-            utc_time_init=standard_time_init,
-        )
+        if self._skip_kernel_furn:
+            spice_interface = SpiceInterface(
+                timer=self._timer,
+                utc_time_init=standard_time_init,
+                kernel_files=[],
+            )
+        else:
+            spice_interface = SpiceInterface(
+                timer=self._timer,
+                utc_time_init=standard_time_init,
+            )
 
         return GravityField(
             timer=self._timer,

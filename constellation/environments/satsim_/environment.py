@@ -33,6 +33,7 @@ class SatsimEnvironment(BaseEnvironment):
         backend: torch.device | None = None,
         fp_precision: torch.dtype = torch.float64,
         reset_trigger_threshold: float = 1e-4,
+        skip_kernel_furn: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -52,6 +53,7 @@ class SatsimEnvironment(BaseEnvironment):
             constellation,
             standard_time_init,
             all_tasks,
+            skip_kernel_furn,
         )
 
         self._reset_trigger_threshold = reset_trigger_threshold
