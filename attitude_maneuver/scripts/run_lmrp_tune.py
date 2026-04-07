@@ -56,15 +56,18 @@ if __name__ == '__main__':
     args = parse_args()
     init_seed(args.seed)
 
-    device = 0
-    torch.cuda.set_device(device)
-    torch.set_default_device(device)
+    # device = 0
+    # torch.cuda.set_device(device)
+    torch.set_default_device('cpu')
 
     config = PyConfig.load(args.config)
     config.override(args.override)
 
+    constellation = Constellation.load(str(args.constellation))
+    num_sats = len(constellation)
+
     # build model
-    model = LearnablePIDConfigure(**config.runner.model)
+    model = LearnablePIDConfigure(**config.runner.model, num_sats=num_sats)
 
     # build optimizer
     optim_config = dict()
@@ -74,7 +77,6 @@ if __name__ == '__main__':
     optimizer = optim_fn(model.parameters(), **optim_config)
 
     env = AttitudeControlEnvironment(**config.runner.environment)
-    constellation = Constellation.load(args.constellation)
     env.constellation = constellation
 
     callbacks = CallbackRegistry.build(
@@ -83,6 +85,8 @@ if __name__ == '__main__':
         )
     )
     config.runner.work_dir = cast(pathlib.Path, args.work_dir)
+
+    (args.work_dir / 'original_name.txt').write_text(str(args.constellation))
 
     trainer = ControllerRunner(
         model,
@@ -98,4 +102,4 @@ if __name__ == '__main__':
 
     trainer.run()
     final_constellation: Constellation = trainer.memo['final_constellation']
-    final_constellation.dump(args.work_dir / 'final_constellation.json')
+    final_constellation.dump(str(args.work_dir / 'final_constellation.json'))

@@ -4,6 +4,7 @@ __all__ = [
 import os
 from multiprocessing import Pool, cpu_count
 
+import spiceypy
 import todd
 import torch
 
@@ -23,9 +24,22 @@ TASKSET = TaskSet.load(str(TASKSET_PATH))
 
 
 def init_worker():
+    spiceypy.kclear()
     torch.set_num_threads(1)
     os.environ['OMP_NUM_THREADS'] = '1'
     os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+
+    # NOTE: This manual kernel furnish is required to avoid spiceypy kernel pool conflict.
+    dir_path = 'third_party/Sat-Sim-pytorch/satsim/simulation/gravity/spice_kernel'
+    file_names = [
+        "de430.bsp",
+        "naif0012.tls",
+        "de-403-masses.tpc",
+        "pck00010.tpc",
+    ]
+    for file_name in file_names:
+        spiceypy.furnsh(os.path.join(dir_path, file_name))
 
 
 def recover_to_equator_task(
@@ -76,7 +90,10 @@ def evaluate_satellites(
     id_: int,
 ) -> float:
     environment = SatsimEnvironment(
-        constellation=constellation, all_tasks=TASKSET, backend='cpu'
+        constellation=constellation,
+        all_tasks=TASKSET,
+        backend='cpu',
+        skip_kernel_furn=True,
     )
     task_manager = TaskManager(timer=environment.timer, taskset=TASKSET)
     callbacks = ComposedCallback(
@@ -152,3 +169,10 @@ class EquatorTestValidator(BaseCallback):
         new_done = before_done.new_tensor([cr > self._threshold for cr in crs])
         done = new_done.bitwise_or(before_done)
         self.model.done = done
+
+        self.runner.logger.info(
+            "Episode %d: %d/%d satellites done",
+            self.runner.episode,
+            self.model.done.sum().item(),
+            len(self.model.done),
+        )

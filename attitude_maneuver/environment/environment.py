@@ -3,6 +3,7 @@ __all__ = [
 ]
 from typing import Any
 
+import spiceypy
 import todd
 import torch
 from satsim.architecture import Timer
@@ -92,6 +93,7 @@ class AttitudeControlEnvironment(StateDictMixin):
         self._taskset = taskset
 
     def build_simulator(self) -> None:
+        spiceypy.kclear()
         self._timer = Timer(1.)
         self._simulator = Simulator(
             self._timer,

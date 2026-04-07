@@ -14,7 +14,6 @@ from torch import nn
 from tqdm import trange
 
 from .environment.environment import AttitudeControlEnvironment
-from .model import MLPPIDConfigure
 
 if TYPE_CHECKING:
     from .callbacks import ComposedCallback

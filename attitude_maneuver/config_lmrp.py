@@ -1,9 +1,10 @@
+# num_envs will be overridden by run_lmrp_tune.py according to the constellation size.
 environment = dict(
     num_envs=512,
+    backend='cpu',  # this is a cpu-efficient task.
 )
 
 model = dict(
-    hidden_dim=256,
     with_integral_limit=False,
 )
 episode_num = 1000
@@ -46,7 +47,10 @@ runner = dict(
             reset_interval=3,
         ),
         dict(type='LMRPLoadActuator'),
-        dict(type='EquatorTestValidator'),
+        dict(
+            type='EquatorTestValidator',
+            interval=20,
+        ),
         dict(type='LMRPEarlyStopCallback'),
         dict(
             type='LossRegistry.LossCollector',
