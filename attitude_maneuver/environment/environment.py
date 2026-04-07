@@ -139,8 +139,6 @@ class AttitudeControlEnvironment(StateDictMixin):
         )
 
     def load_state_dict(self, state_dict, *args, **kwargs):
-        self._stochastic_init()
-
         if 'constellation' in state_dict:
             self._constellation = Constellation.from_dict(
                 state_dict['constellation']
@@ -148,8 +146,6 @@ class AttitudeControlEnvironment(StateDictMixin):
 
         if 'taskset' in state_dict:
             self._taskset = TaskSet.from_dicts(state_dict['taskset'])
-
-        self.build_simulator()
 
         if 'simulator_state_dict' in state_dict:
             self._simulator_state_dict = state_dict['simulator_state_dict']

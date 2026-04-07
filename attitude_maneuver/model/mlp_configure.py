@@ -33,20 +33,6 @@ class MLPPIDConfigure(nn.Module):
         self._input_normalizer = InputNormalizer(self._input_dim)
         self._runtime_normalizer = deepcopy(self._input_normalizer)
 
-        def backward_hook(
-            module: 'MLPPIDConfigure',
-            *args,
-            **kwargs,
-        ):
-            if not module.need_update:
-                return None
-
-            module.update_normalizer()
-
-            return None
-
-        self.register_full_backward_hook(backward_hook)
-
         # Initialize the last layer bias to some reasonable values
         last_layer = self.mlp[-1]
         self.init_bias(
