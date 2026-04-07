@@ -49,6 +49,11 @@ def parse_args():
     parser.add_argument('--debug', action='store_true', help='Debug mode.')
     parser.add_argument('--override', action=DictAction, default=dict())
     parser.add_argument('--seed', type=int, default=42, help='Random seed.')
+    parser.add_argument(
+        '--save-path',
+        type=pathlib.Path,
+        required=True,
+    )
     return parser.parse_args()
 
 
@@ -86,8 +91,6 @@ if __name__ == '__main__':
     )
     config.runner.work_dir = cast(pathlib.Path, args.work_dir)
 
-    (args.work_dir / 'original_name.txt').write_text(str(args.constellation))
-
     trainer = ControllerRunner(
         model,
         callbacks,
@@ -102,4 +105,4 @@ if __name__ == '__main__':
 
     trainer.run()
     final_constellation: Constellation = trainer.memo['final_constellation']
-    final_constellation.dump(str(args.work_dir / 'final_constellation.json'))
+    final_constellation.dump(str(args.save_path))

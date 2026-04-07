@@ -19,10 +19,10 @@ from todd.utils import NestedTensorCollectionUtils
 from constellation import (
     ANNOTATIONS_ROOT,
     CONSTELLATIONS_ROOT,
+    DATA_ROOT,
     STATISTICS_PATH,
     TASKSETS_ROOT,
     TRAJECTORIES_ROOT,
-    DATA_ROOT,
 )
 from constellation.data import Constellation, TaskSet
 
@@ -194,7 +194,7 @@ class Dataset(torch.utils.data.Dataset[Batch]):
         finished_mask = progress >= duration
         finished_mask, _ = finished_mask.cummax(0)
         mask = release_time_mask & due_time_mask
-        mask[1:] &= ~finished_mask[:-1] # FIXME
+        mask[1:] &= ~finished_mask[:-1]  # FIXME
 
         return sensor_type, data, mask
 
@@ -210,11 +210,8 @@ class Dataset(torch.utils.data.Dataset[Batch]):
         best_epoch_ = self._annotations['epochs'][index]
 
         trajectory: TrajectoryData = torch.load(
-            DATA_ROOT
-            / f'trajectories.{best_epoch_}'
-            / self._split
-            / f'{id_ // 1000:02}'
-            / f'{id_:05}.pth',
+            DATA_ROOT / f'trajectories.{best_epoch_}' / self._split
+            / f'{id_ // 1000:02}' / f'{id_:05}.pth',
         )
 
         tasks_sensor_type, tasks_data, tasks_mask = self._load_tasks(
@@ -253,7 +250,9 @@ class Dataset(torch.utils.data.Dataset[Batch]):
             tasks_mask,
         ], -1)
         if not augmented_tasks_mask.gather(-1, actions_task_id + 1).all():
-            raise RuntimeError(f"Trajectory.{best_epoch_} {index} ({id_}) is invalid")
+            raise RuntimeError(
+                f"Trajectory.{best_epoch_} {index} ({id_}) is invalid"
+            )
 
         (
             constellation_sensor_type,
@@ -280,7 +279,7 @@ class Dataset(torch.utils.data.Dataset[Batch]):
             id_,
             indices,
             constellation_sensor_type - 1,
-            constellation_sensor_enabled,
+            constellation_sensor_enabled.int(),
             constellation_data,
             constellation_mask,
             tasks_sensor_type - 1,

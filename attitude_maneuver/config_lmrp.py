@@ -49,14 +49,13 @@ runner = dict(
         dict(type='LMRPLoadActuator'),
         dict(
             type='EquatorTestValidator',
-            interval=20,
+            interval=50,
         ),
         dict(type='LMRPEarlyStopCallback'),
         dict(
             type='LossRegistry.LossCollector',
             losses=dict(
                 attitude_loss=dict(type='AttitudeLoss', weight=1.0),
-                battery_loss=dict(type='BatteryLoss', weight=0.01),
                 motion_loss=dict(type='MotionLoss', weight=1.0, threshold=0.1)
             )
         ),
@@ -66,9 +65,6 @@ runner = dict(
             lr_scheduler_config=step_scheduler,
         ),
         dict(type='LoggerRegistry.LogCallback', file_logging=True),
-        dict(type='MonitorRegistry.BatteryMonitor'),
-        dict(type='MonitorRegistry.AttitudeErrorsMonitor'),
-        dict(type='MonitorRegistry.TorqueMonitor'),
     ],
     environment=environment,
     optimizer=optimizer,

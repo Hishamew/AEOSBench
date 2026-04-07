@@ -109,7 +109,7 @@ def evaluate_satellites(
     algorithm = OptimalAlgorithm(timer=environment.timer)
     algorithm.prepare(environment, task_manager)
 
-    controller.run(algorithm, progress_bar=False, max_time_step=7200)
+    controller.run(algorithm, progress_bar=id_ == 0, max_time_step=7200)
     completion_rate = controller.memo['metrics']['CR']
     todd.logger.info(f"finished {id_} with {completion_rate}")
     return completion_rate
