@@ -72,3 +72,10 @@ class ComposedCallback(BaseCallback, BuildPreHookMixin):
         super().after_run()
         for callback in self._callbacks:
             callback.after_run()
+
+    def should_stop(self):
+        super().should_stop()
+        for callback in self._callbacks:
+            if callback.should_stop():
+                return True
+        return False

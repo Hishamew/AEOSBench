@@ -47,6 +47,10 @@ class AttitudeControlEnvironment(StateDictMixin):
     def num_envs(self) -> int:
         return self._num_envs
 
+    @num_envs.setter
+    def num_envs(self, num_envs: int) -> None:
+        self._num_envs = num_envs
+
     @property
     def is_built(self) -> bool:
         return hasattr(self, "_simulator")
@@ -81,6 +85,7 @@ class AttitudeControlEnvironment(StateDictMixin):
     @constellation.setter
     def constellation(self, constellation: Constellation) -> None:
         self._constellation = constellation
+        self.num_envs = len(constellation)
 
     @taskset.setter
     def taskset(self, taskset: TaskSet) -> None:

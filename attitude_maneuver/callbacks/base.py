@@ -23,3 +23,6 @@ class BaseCallback(RunnerHolder):
 
     def after_run(self) -> None:
         pass
+
+    def should_stop(self) -> bool:
+        return False

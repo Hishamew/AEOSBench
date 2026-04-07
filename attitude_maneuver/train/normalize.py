@@ -1,3 +1,6 @@
+__all__ = [
+    "UpdateNormalizerCallback",
+]
 from ..callbacks import BaseCallback
 from ..model import MLPPIDConfigure
 from ..registries import CallbackRegistry
@@ -8,8 +11,7 @@ class UpdateNormalizerCallback(BaseCallback):
 
     def bind(self, *args, **kwargs) -> None:
         super().bind(*args, **kwargs)
-        self._model = self.runner.model
-        if not isinstance(self._model, MLPPIDConfigure):
+        if not isinstance(self.model, MLPPIDConfigure):
             self.runner.logger.error(
                 "UpdateNormalizerCallback only works with MLPPIDConfigure model."
             )
@@ -17,6 +19,10 @@ class UpdateNormalizerCallback(BaseCallback):
                 "UpdateNormalizerCallback only works with MLPPIDConfigure model."
             )
 
+    @property
+    def model(self) -> MLPPIDConfigure:
+        return self.runner.model
+
     def after_episode(self):
-        if self._model.need_update:
-            self._model.update_normalizer()
+        if self.model.need_update:
+            self.model.update_normalizer()

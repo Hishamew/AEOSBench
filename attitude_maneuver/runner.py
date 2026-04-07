@@ -10,6 +10,7 @@ import todd
 import torch
 from todd.configs import PyConfig
 from todd.runners import Memo
+from torch import nn
 from tqdm import trange
 
 from .environment.environment import AttitudeControlEnvironment
@@ -23,7 +24,7 @@ class ControllerRunner:
 
     def __init__(
         self,
-        model: MLPPIDConfigure,
+        model: nn.Module,
         callbacks: 'ComposedCallback',
         config: PyConfig,
         env: AttitudeControlEnvironment,
@@ -79,7 +80,7 @@ class ControllerRunner:
         return self._env
 
     @property
-    def model(self) -> MLPPIDConfigure:
+    def model(self) -> nn.Module:
         return self._model
 
     @property
@@ -102,7 +103,6 @@ class ControllerRunner:
     def run_episode(self) -> None:
 
         self._callbacks.before_episode()
-        self.load_actuator()
 
         for step in trange(
             self.episode_length, disable=not self.config.progress_bar
@@ -112,32 +112,6 @@ class ControllerRunner:
             self._callbacks.after_step()
 
         self._callbacks.after_episode()
-
-    def load_actuator(self) -> None:
-        simulator = self.environment.simulator
-        rw = simulator.reaction_wheels
-        rw_inertia = rw.moment_of_inertia_wrt_spin.squeeze()
-
-        hub = simulator.spacecraft.hub
-        sc_mass = hub.mass
-        sc_inertia = hub.moment_of_inertia_matrix_wrt_body_point
-        sc_inertia = torch.diagonal(sc_inertia, dim1=-2, dim2=-1)
-
-        params_dtype = torch.get_default_dtype()
-        pid_params: torch.Tensor = self.model(
-            sc_inertia=sc_inertia.to(params_dtype),
-            rw_inertia=rw_inertia.to(params_dtype),
-            sc_mass=sc_mass.to(params_dtype),
-        )
-        k, ki, p, integral_limit = pid_params.unbind(-1)
-        self.environment.simulator.configure_pid(
-            self.environment.simulator_state_dict,
-            k,
-            ki,
-            p,
-            integral_limit,
-            self.full_grad,
-        )
 
     def run(self) -> None:
 
@@ -150,4 +124,4 @@ class ControllerRunner:
         self.tag = 'after_run'
         self._callbacks.after_run()
 
-        self.logger.info("Training completed.")
+        self.logger.info("Running completed.")
