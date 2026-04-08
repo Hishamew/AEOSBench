@@ -208,4 +208,9 @@ class EquatorTestValidator(BaseCallback):
         self._run_test()
 
     def after_run(self):
+        if self.model.done.all():
+            self.runner.logger.info(
+                "All satellites are done, skipping final test."
+            )
+            return
         self._run_test()
