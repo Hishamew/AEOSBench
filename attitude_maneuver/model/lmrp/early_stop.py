@@ -1,5 +1,6 @@
 __all__ = [
     'LMRPEarlyStopCallback',
+    'ConstellationSaveCallback',
 ]
 import pathlib
 
@@ -28,6 +29,7 @@ class LMRPEarlyStopCallback(BaseCallback):
             )
 
 
+@CallbackRegistry.register_()
 class ConstellationSaveCallback(BaseCallback):
 
     def __init__(self, *args, interval: int = 100, **kwargs) -> None:
