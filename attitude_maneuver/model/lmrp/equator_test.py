@@ -90,7 +90,11 @@ def recover_to_equator_task(
 def evaluate_satellites(
     constellation: Constellation,
     id_: int,
+    skip: bool,
 ) -> float:
+    if skip:
+        todd.logger.info(f"{id_} is done, skipping evaluation.")
+        return 1.0
     environment = SatsimEnvironment(
         constellation=constellation,
         all_tasks=TASKSET,
@@ -169,7 +173,10 @@ class EquatorTestValidator(BaseCallback):
         )
         max_processes = min(total_sat, cpu_count())
         with Pool(processes=max_processes, initializer=init_worker) as pool:
-            tasks = [(recovered_constellation[i], i) for i in range(total_sat)]
+            tasks = [
+                (recovered_constellation[i], i, self.model.done[i].item())
+                for i in range(total_sat)
+            ]
             crs = pool.starmap(evaluate_satellites, tasks)
 
         before_done = self.model.done
