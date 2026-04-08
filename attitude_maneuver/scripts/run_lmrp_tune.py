@@ -61,10 +61,10 @@ if __name__ == '__main__':
     args = parse_args()
     init_seed(args.seed)
 
-    device = 0
-    torch.cuda.set_device(device)
-    torch.set_default_device(device)
-    # torch.set_default_device('cpu')
+    # device = 0
+    # torch.cuda.set_device(device)
+    # torch.set_default_device(device)
+    torch.set_default_device('cpu')
 
     config = PyConfig.load(args.config)
     config.override(args.override)

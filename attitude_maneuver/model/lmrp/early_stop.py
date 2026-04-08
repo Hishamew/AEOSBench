@@ -1,6 +1,8 @@
 __all__ = [
     'LMRPEarlyStopCallback',
 ]
+import pathlib
+
 from attitude_maneuver.callbacks import BaseCallback
 from attitude_maneuver.registries import CallbackRegistry
 
@@ -25,6 +27,22 @@ class LMRPEarlyStopCallback(BaseCallback):
                 "Process is ending, but not all MRP are done."
             )
 
+
+class ConstellationSaveCallback(BaseCallback):
+
+    def __init__(self, *args, interval: int = 100, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.interval = interval
+
+    @property
+    def should_save(self) -> bool:
+        return self.runner.episode % self.interval == 0
+
+    @property
+    def work_dir(self) -> pathlib.Path:
+        return self.runner.work_dir / 'constellation'
+
+    def _save(self) -> None:
         constellation = self.runner.environment.constellation
         params = self.runner.model()
         ks, kis, ps, integral_limits = map(
@@ -62,4 +80,14 @@ class LMRPEarlyStopCallback(BaseCallback):
             )
             satellites.append(new_sat)
         new_constellation = Constellation({sat.id_: sat for sat in satellites})
-        self.runner.memo['final_constellation'] = new_constellation
+        self.runner.memo['constellation'] = new_constellation
+
+        save_path = self.work_dir / f'constellation_{self.runner.tag}.json'
+        new_constellation.dump(str(save_path))
+
+    def after_episode(self):
+        if self.should_save:
+            self._save()
+
+    def after_run(self):
+        self._save()

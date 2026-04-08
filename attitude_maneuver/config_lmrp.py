@@ -11,7 +11,7 @@ episode_num = 1000
 warmup_episode = 100
 optimizer = dict(
     type='torch.optim.Adam',
-    lr=1e-3,
+    lr=2e-4,
     betas=(0.7, 0.95),
 )
 cos_scheduler = dict(
@@ -30,7 +30,7 @@ step_scheduler = dict(
         ),
         dict(
             type='MultiStepLR',
-            milestones=[150, 400,650],
+            milestones=[150, 400, 650],
             gamma=0.1,
         )
     ],
@@ -52,6 +52,7 @@ runner = dict(
             interval=100,
         ),
         dict(type='LMRPEarlyStopCallback'),
+        dict(type='ConstellationSaveCallback', interval=100),
         dict(
             type='LossRegistry.LossCollector',
             losses=dict(

@@ -1,7 +1,9 @@
 __all__ = [
     'EquatorTestValidator',
 ]
+import json
 import os
+import pathlib
 from multiprocessing import Pool, cpu_count
 
 import spiceypy
@@ -137,7 +139,15 @@ class EquatorTestValidator(BaseCallback):
     def model(self) -> LearnablePIDConfigure:
         return self.runner.model
 
-    def _run_test(self)->None:
+    @property
+    def work_dir(self) -> pathlib.Path:
+        return self.runner.work_dir / 'test_result'
+
+    def bind(self, *args, **kwargs):
+        super().bind(*args, **kwargs)
+        self.work_dir.mkdir(parents=True, exist_ok=True)
+
+    def _run_test(self) -> None:
         constellation = self.runner.environment.constellation
         with torch.no_grad():
             params = self.runner.model()
@@ -177,6 +187,13 @@ class EquatorTestValidator(BaseCallback):
             not_done_list,
         )
 
+        json_file = self.work_dir / f'{self.runner.tag}.json'
+        with json_file.open() as f:
+            json.dump(
+                dict(done=done, crs=crs),
+                f,
+                indent=4,
+            )
 
     def after_episode(self):
         if not self.should_run_test:
