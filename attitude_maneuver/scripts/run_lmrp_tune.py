@@ -105,5 +105,5 @@ if __name__ == '__main__':
         torch.set_anomaly_enabled(True)
 
     trainer.run()
-    final_constellation: Constellation = trainer.memo['final_constellation']
+    final_constellation: Constellation = trainer.memo['constellation']
     final_constellation.dump(str(args.save_path))

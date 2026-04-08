@@ -1,7 +1,6 @@
 __all__ = [
     'EquatorTestValidator',
 ]
-import json
 import os
 import pathlib
 from multiprocessing import Pool, cpu_count
@@ -9,6 +8,7 @@ from multiprocessing import Pool, cpu_count
 import spiceypy
 import todd
 import torch
+from todd.patches.py_ import json_dump
 
 from constellation import TASKSETS_ROOT, Controller, TaskManager
 from constellation.algorithms import OptimalAlgorithm
@@ -188,12 +188,11 @@ class EquatorTestValidator(BaseCallback):
         )
 
         json_file = self.work_dir / f'{self.runner.tag}.json'
-        with json_file.open() as f:
-            json.dump(
-                dict(done=done, crs=crs),
-                f,
-                indent=4,
-            )
+        json_dump(
+            dict(done=done.tolist(), crs=crs),
+            str(json_file),
+            indent=4,
+        )
 
     def after_episode(self):
         if not self.should_run_test:

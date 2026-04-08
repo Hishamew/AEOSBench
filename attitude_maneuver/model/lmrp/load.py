@@ -41,7 +41,7 @@ class LMRPLoadActuator(BaseCallback):
             params = torch.stack([k, ki, p], dim=-1)
 
         with torch.no_grad():
-            self.model._params.copy_(params)
+            self.model._raw_params.copy_(params.log())
 
     def before_episode(self) -> None:
         params: torch.Tensor = self.model()

@@ -44,6 +44,10 @@ class ConstellationSaveCallback(BaseCallback):
     def work_dir(self) -> pathlib.Path:
         return self.runner.work_dir / 'constellation'
 
+    def bind(self, *args, **kwargs):
+        super().bind(*args, **kwargs)
+        self.work_dir.mkdir(parents=True, exist_ok=True)
+
     def _save(self) -> None:
         constellation = self.runner.environment.constellation
         params = self.runner.model()
