@@ -137,10 +137,7 @@ class EquatorTestValidator(BaseCallback):
     def model(self) -> LearnablePIDConfigure:
         return self.runner.model
 
-    def after_episode(self):
-        if not self.should_run_test:
-            return
-
+    def _run_test(self)->None:
         constellation = self.runner.environment.constellation
         with torch.no_grad():
             params = self.runner.model()
@@ -170,9 +167,22 @@ class EquatorTestValidator(BaseCallback):
         done = new_done.bitwise_or(before_done)
         self.model.done = done
 
+        not_done_list = (~done).nonzero().squeeze().tolist()
+
         self.runner.logger.info(
-            "Episode %d: %d/%d satellites done",
+            "Episode %d: %d/%d satellites done | Not done idx: %s",
             self.runner.episode,
             self.model.done.sum().item(),
             len(self.model.done),
+            not_done_list,
         )
+
+
+    def after_episode(self):
+        if not self.should_run_test:
+            return
+
+        self._run_test()
+
+    def after_run(self):
+        self._run_test()

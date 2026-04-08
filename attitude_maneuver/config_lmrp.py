@@ -11,7 +11,7 @@ episode_num = 1000
 warmup_episode = 100
 optimizer = dict(
     type='torch.optim.Adam',
-    lr=1e-4,
+    lr=1e-3,
     betas=(0.7, 0.95),
 )
 cos_scheduler = dict(
@@ -30,7 +30,7 @@ step_scheduler = dict(
         ),
         dict(
             type='MultiStepLR',
-            milestones=[300, 600],
+            milestones=[150, 400,650],
             gamma=0.1,
         )
     ],
@@ -49,7 +49,7 @@ runner = dict(
         dict(type='LMRPLoadActuator'),
         dict(
             type='EquatorTestValidator',
-            interval=50,
+            interval=100,
         ),
         dict(type='LMRPEarlyStopCallback'),
         dict(
