@@ -50,42 +50,41 @@ class CompletionRateEvaluator(BaseEvaluator):
         })
 
 
-# NOTE: This evaluator is used for generating satellites with a completion rate threshold. It is not used for evaluation in the paper, so we do not report its results in the paper.
-class PerCompletionRateEvaluator(BaseEvaluator):
+class PerCompletionRateEvaluator(CompletionRateEvaluator):
 
-    @property
-    def max_progress_per_satellite(self) -> torch.Tensor:
-        return self.controller.memo['max_progress_per_satellite']
-
-    @max_progress_per_satellite.setter
-    def max_progress_per_satellite(self, value: torch.Tensor) -> None:
-        self.controller.memo['max_progress_per_satellite'] = value
-
-    @property
-    def succeeded_flags_per_satellite(self) -> torch.Tensor:
-        max_progress = self.max_progress_per_satellite
-        durations = self.controller.task_manager.taskset.durations.unsqueeze(0)
-        return max_progress >= durations
-
-    def before_run(self):
-        self.max_progress_per_satellite = torch.zeros(
-            self.controller.environment.num_satellites,
-            self.controller.task_manager.num_all_tasks,
-            dtype=torch.int
-        )
-
-    def after_step(self):
-        visible_flags: torch.Tensor = self.controller.memo['is_visible']
-        visible_flags[:, ~self.controller.task_manager.ongoing_flags] = False
-        self.max_progress_per_satellite = (
-            self.max_progress_per_satellite + visible_flags.int()
-        )
+    def __init__(
+        self,
+        *args,
+        taskset_split: list[int],
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._taskset_split = taskset_split
 
     def after_run(self) -> None:
-        succeeded_flags_per_satellite = self.succeeded_flags_per_satellite
-        completion_rate = (
-            succeeded_flags_per_satellite.float().mean(dim=1).tolist()
-        )
-        self.metrics.update({
-            'CR_persat': completion_rate,
-        })
+        durations = self.controller.task_manager.taskset.durations
+        durations_per_env = durations.split(self._taskset_split)
+        succeeded_flags = self.controller.task_manager.succeeded_flags
+        succeeded_flags_per_env = succeeded_flags.split(self._taskset_split)
+
+        metrics = []
+        for nt, durations, succeeded_flags, max_progress in zip(
+            self._taskset_split,
+            durations_per_env,
+            succeeded_flags_per_env,
+            self.max_progress.split(self._taskset_split),
+        ):
+            completion_rate = succeeded_flags.sum() / nt
+            weighted_completion_rate = durations[succeeded_flags].sum(
+            ) / durations.sum()
+            partial_completion_rate = max_progress / durations
+            weighted_partial_completion_rate = max_progress.sum(
+            ) / durations.sum()
+            metrics.append({
+                'CR': completion_rate.item(),
+                'WCR': weighted_completion_rate.item(),
+                'PCR': partial_completion_rate.mean().item(),
+                'WPCR': weighted_partial_completion_rate.item(),
+            })
+
+        self.metrics.update(metric_per_env=metrics)
